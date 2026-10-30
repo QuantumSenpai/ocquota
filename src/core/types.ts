@@ -22,11 +22,53 @@ export interface TokenUsage {
 
 /** Usage for a whole window. Always produced by SQL aggregation, never by JS loops. */
 export interface UsageTotals {
+  /** assistant messages inside the window */
+  messages: number;
   sessions: number;
   cost: number;
   tokens: TokenUsage;
-  /** newest session_v2.time_updated inside the window, or null when empty */
+  /** what the quota counts; see EXPR_COUNTABLE in data/message-paths.ts */
+  totalTokens: number;
+  /** newest session_message.time_created inside the window, or null when empty */
   lastActivityAt: number | null;
+}
+
+/** Aggregate over everything since a timestamp (open-ended upper bound). */
+export interface Totals extends UsageTotals {
+  from: number;
+}
+
+/** Per-model rollup for `totalsByModel`. */
+export interface ModelTotals {
+  providerId: string;
+  modelId: string;
+  messages: number;
+  cost: number;
+  tokens: TokenUsage;
+  /** what the quota counts (see countableTokens) */
+  totalTokens: number;
+}
+
+/** One local-day rollup for `dailyBuckets`. */
+export interface DailyBucket {
+  /** epoch ms of local midnight starting this bucket */
+  dayStart: number;
+  messages: number;
+  cost: number;
+  tokens: TokenUsage;
+  totalTokens: number;
+}
+
+/** One session row for `topSessions`. */
+export interface SessionTotals {
+  sessionId: string;
+  title: string | null;
+  messages: number;
+  cost: number;
+  tokens: TokenUsage;
+  totalTokens: number;
+  /** newest message in the window */
+  lastActivityAt: number;
 }
 
 /** Half-open time interval [start, end) in epoch milliseconds (UTC). */
@@ -50,9 +92,11 @@ export interface QuotaSnapshot {
   /** used/limit, unclamped so an over-quota window is visible */
   percent: number;
   tokens: TokenUsage;
-  /** tokens the quota counts (input + output + reasoning + cacheWrite) */
+  /** tokens the quota counts (see countableTokens) */
   totalTokens: number;
   cost: number;
+  /** assistant messages inside the window */
+  messages: number;
   sessions: number;
   lastActivityAt: number | null;
   /** epoch ms the snapshot was taken */

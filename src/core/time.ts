@@ -49,6 +49,12 @@ export function startOfMonth(timeZone: TimeZone, utcMs: number): number {
   return timeZone.earliestInstantAt(firstWall);
 }
 
+/** Start of the local day `daysBack` days before the day containing `utcMs`. */
+export function startOfDayOffset(timeZone: TimeZone, utcMs: number, daysBack: number): number {
+  const wall = floorWallDay(timeZone.toWallClockMs(utcMs)) - daysBack * MS_PER_DAY;
+  return timeZone.earliestInstantAt(wall);
+}
+
 /** Next local midnight strictly after `utcMs`. */
 export function nextDayStart(timeZone: TimeZone, utcMs: number): number {
   return timeZone.earliestInstantAt(floorWallDay(timeZone.toWallClockMs(utcMs)) + MS_PER_DAY);

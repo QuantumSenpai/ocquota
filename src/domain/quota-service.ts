@@ -1,9 +1,9 @@
 /**
  * QuotaService — the single producer of QuotaSnapshot. One snapshot costs one
- * aggregated SQL query plus O(1) arithmetic; it never iterates rows.
+ * aggregated SQL query over session_message plus O(1) arithmetic; it never
+ * iterates rows and knows nothing about SQL.
  */
-
-import type { TokenUsage, QuotaMetric, QuotaSnapshot } from "../core/types.ts";
+import type { QuotaMetric, QuotaSnapshot, WindowRange } from "../core/types.ts";
 import type { UsageRepository } from "../data/repository.ts";
 import type { WindowStrategy } from "./window.ts";
 
@@ -23,12 +23,17 @@ export class QuotaService {
     private readonly clock: () => number = Date.now,
   ) {}
 
+  /** The quota window right now (`[start, end)`); what a snapshot would cover. */
+  range(): WindowRange {
+    return this.window.range(this.clock());
+  }
+
   /** O(1) caller-side work: one SQL aggregate for the window, then arithmetic. */
   snapshot(): QuotaSnapshot {
     const takenAt = this.clock();
-    const range = this.window.range(takenAt);
+    const range = this.range();
     const totals = this.repository.usageInRange(range);
-    const totalTokens = countableTokens(totals.tokens);
+    const totalTokens = totals.totalTokens;
     const used = this.metric === "cost" ? totals.cost : totalTokens;
     const limit = this.metric === "cost" ? (this.limits.cost ?? 0) : this.limits.tokens;
 
@@ -43,20 +48,10 @@ export class QuotaService {
       tokens: totals.tokens,
       totalTokens,
       cost: totals.cost,
+      messages: totals.messages,
       sessions: totals.sessions,
       lastActivityAt: totals.lastActivityAt,
       takenAt,
     };
   }
-}
-
-/**
- * What the token limit counts: everything the model produces plus cache
- * *writes* (providers bill cache writes at input price). Cache *reads* are
- * excluded — in a real DB they dwarf everything else (288M reads vs ~500K
- * other tokens) at a fraction of the price, so counting them would pin the bar
- * at 100% forever.
- */
-function countableTokens(tokens: TokenUsage): number {
-  return tokens.input + tokens.output + tokens.reasoning + tokens.cacheWrite;
 }

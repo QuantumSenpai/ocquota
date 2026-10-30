@@ -146,7 +146,8 @@ export function systemTimeZoneId(): string {
   return Intl.DateTimeFormat().resolvedOptions().timeZone;
 }
 
-function formatOffset(offsetMinutes: number): string {
+/** "+05:30" / "-08:00"; the one place an offset becomes a string. */
+export function formatOffset(offsetMinutes: number): string {
   const sign = offsetMinutes < 0 ? "-" : "+";
   const abs = Math.abs(offsetMinutes);
   return `${sign}${String(Math.floor(abs / 60)).padStart(2, "0")}:${String(abs % 60).padStart(2, "0")}`;

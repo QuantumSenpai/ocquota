@@ -1,98 +1,41 @@
 #!/usr/bin/env bun
 /**
- * ocquota CLI — thin wiring only: parse flags, build the object graph with
- * constructor injection, hand it to a renderer, run. No business logic here.
+ * ocquota CLI — thin wiring only: declare flags and commands, hand each one a
+ * finished App, run. Every command body is one expression; the object graph is
+ * built in app.ts and all formatting lives in render/.
  */
 
 import { cac } from "cac";
-import pc from "picocolors";
 import pkg from "../package.json";
-import { ConfigStore, type CliOverrides, type QuotaConfig } from "./config/config-store.ts";
-import { OcquotaError } from "./core/errors.ts";
-import { createTimeZone } from "./core/timezone.ts";
-import type { TimeZone } from "./core/time.ts";
-import { SqliteDatabase } from "./data/database.ts";
-import { SqliteUsageRepository } from "./data/sqlite-usage-repository.ts";
-import { QuotaService } from "./domain/quota-service.ts";
-import { createWindow } from "./domain/window.ts";
-import { FullRenderer } from "./render/full-renderer.ts";
+import { COLORS, buildApp, fullRenderer, oneLineRenderer, withApp, writeLine, type App, type RawOptions } from "./app.ts";
+import { ConfigError, OcquotaError } from "./core/errors.ts";
+import { nextDayStart, startOfDayOffset } from "./core/time.ts";
 import { JsonRenderer } from "./render/json-renderer.ts";
-import { OneLineRenderer } from "./render/one-line-renderer.ts";
-import { ProgressBar } from "./render/progress-bar.ts";
-import type { Renderer, RendererColors } from "./render/renderer.ts";
+import { renderDaily, renderModels, renderSessions, renderTotals } from "./render/report-renderer.ts";
 import { WatchLoop } from "./render/watch-loop.ts";
 
-/** picocolors satisfies RendererColors structurally. */
-const COLORS: RendererColors = pc;
-
-interface App {
-  config: QuotaConfig;
-  db: SqliteDatabase;
-  repository: SqliteUsageRepository;
-  service: QuotaService;
-  timeZone: TimeZone;
+/** Build an action that prints one rendered report block. */
+function report(render: (app: App) => string): (options: RawOptions) => void {
+  return withApp((app) => writeLine(render(app)));
 }
 
-interface RawOptions {
-  db?: string | undefined;
-  window?: string | undefined;
-  limit?: string | undefined;
-  limitCost?: string | undefined;
-  metric?: string | undefined;
-  refresh?: string | undefined;
-  tz?: string | undefined;
+/** Parse a small integer flag, or fall back to the default; friendly on garbage. */
+function intOption(raw: string | undefined, flag: string, fallback: number, max: number): number {
+  if (raw === undefined || raw === "") return fallback;
+  const value = Number(raw);
+  if (!Number.isInteger(value) || value < 1 || value > max) {
+    throw new ConfigError(`${flag} expects a whole number between 1 and ${max}, got "${raw}".`);
+  }
+  return value;
 }
 
-/** Config -> connection -> repository -> service; the only place objects are built. */
-function buildApp(options: RawOptions): App {
-  const cliOverrides: CliOverrides = {
-    dbPath: options.db,
-    window: options.window,
-    limitTokens: options.limit,
-    limitCost: options.limitCost,
-    metric: options.metric,
-    refreshMs: options.refresh,
-    timezone: options.tz,
+/** Local-day span for `daily`: N midnights back through the end of today. */
+function dailyRange(app: App, days: number): { from: number; to: number } {
+  const now = Date.now();
+  return {
+    from: startOfDayOffset(app.timeZone, now, days - 1),
+    to: nextDayStart(app.timeZone, now),
   };
-  const config = new ConfigStore().load(cliOverrides);
-  const db = new SqliteDatabase(config.dbPath);
-  const timeZone = createTimeZone(config.timezone);
-  const repository = new SqliteUsageRepository(db);
-  const service = new QuotaService(
-    repository,
-    createWindow(config.window, timeZone),
-    { tokens: config.limitTokens, cost: config.limitCost },
-    config.metric,
-  );
-  return { config, db, repository, service, timeZone };
-}
-
-/** Build an action that always closes the connection, success or failure. */
-function withApp(run: (app: App) => void): (options: RawOptions) => void {
-  return (options) => {
-    const app = buildApp(options);
-    try {
-      run(app);
-    } finally {
-      app.db.close();
-    }
-  };
-}
-
-function fullRenderer(app: App): Renderer {
-  return new FullRenderer({
-    bar: new ProgressBar(app.config.barWidth),
-    colors: COLORS,
-    timeZone: app.timeZone,
-  });
-}
-
-function oneLineRenderer(app: App): Renderer {
-  return new OneLineRenderer({ bar: new ProgressBar(app.config.barWidth), colors: COLORS });
-}
-
-function printFull(app: App): void {
-  process.stdout.write(`${fullRenderer(app).render(app.service.snapshot())}\n`);
 }
 
 function main(): void {
@@ -105,36 +48,54 @@ function main(): void {
   cli.option("--metric <metric>", "What the limit counts: tokens | cost");
   cli.option("--refresh <ms>", "Watch-mode refresh interval in ms");
   cli.option("--tz <zone>", 'IANA zone or offset, e.g. "Asia/Kolkata" or "+05:30"');
+  cli.option("--days <n>", "daily: how many local days to show (default 7)");
+  cli.option("--n <rows>", "top: how many sessions to show (default 5)");
 
-  cli.command("", "Show the quota bar (default)").action(withApp(printFull));
-  cli.command("bar", "Show the quota bar (alias of the default command)").action(withApp(printFull));
+  cli.command("", "Show the quota bar (default)").action(withApp((app) => writeLine(fullRenderer(app).render(app.service.snapshot()))));
+  cli.command("bar", "Show the quota bar (alias of the default command)").action(withApp((app) => writeLine(fullRenderer(app).render(app.service.snapshot()))));
 
   cli.command("watch", "Refresh the quota bar until Ctrl-C").action((options: RawOptions) => {
     const app = buildApp(options);
-    new WatchLoop({
+    const loop = new WatchLoop({
       render: () => fullRenderer(app).render(app.service.snapshot()),
       refreshMs: app.config.refreshMs,
       colors: COLORS,
       onClose: () => app.db.close(),
-    }).start();
+    });
+    loop.start();
   });
 
-  cli.command("oneline", "Print a single status line").action(
-    withApp((app) => {
-      process.stdout.write(`${oneLineRenderer(app).render(app.service.snapshot())}\n`);
-    }),
+  cli.command("oneline", "Print a single status line").action(report((app) => oneLineRenderer(app).render(app.service.snapshot())));
+  cli.command("json", "Print the snapshot as JSON").action(report((app) => new JsonRenderer().render(app.service.snapshot())));
+
+  cli.command("totals", "Exact per-message totals for the current window").action(
+    report((app) => renderTotals(app.repository.totalsSince(app.service.range().start), COLORS, app.timeZone)),
   );
 
-  cli.command("json", "Print the snapshot as JSON").action(
-    withApp((app) => {
-      process.stdout.write(`${new JsonRenderer().render(app.service.snapshot())}\n`);
-    }),
+  cli.command("models", "Per-model totals for the current window, heaviest first").action(
+    report((app) => renderModels(app.repository.totalsByModel(app.service.range().start), COLORS)),
   );
 
-  cli.command("explain", "Print the query plan for the window aggregation").action(
+  cli.command("daily", "One bucket per local day").action((options: RawOptions) => {
+    const days = intOption(options.days, "--days", 7, 366);
     withApp((app) => {
-      process.stdout.write(`${pc.bold("EXPLAIN QUERY PLAN (window usage query)")}\n`);
-      for (const line of app.repository.explainUsageInRange()) process.stdout.write(`  ${line}\n`);
+      const range = dailyRange(app, days);
+      const offsetMinutes = app.timeZone.offsetMinutesAt(Date.now());
+      writeLine(renderDaily(app.repository.dailyBuckets(range.from, range.to, offsetMinutes), COLORS, app.timeZone));
+    })(options);
+  });
+
+  cli.command("top", "Heaviest sessions in the current window").action((options: RawOptions) => {
+    const n = intOption(options.n, "--n", 5, 1_000);
+    withApp((app) => writeLine(renderSessions(app.repository.topSessions(app.service.range().start, n), COLORS, app.timeZone)))(options);
+  });
+
+  cli.command("explain", "Print EXPLAIN QUERY PLAN for every repository query").action(
+    withApp((app) => {
+      for (const plan of app.repository.explainAll()) {
+        writeLine(COLORS.bold(plan.name));
+        for (const line of plan.lines) writeLine(`  ${line}`);
+      }
     }),
   );
 

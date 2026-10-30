@@ -12,7 +12,7 @@ import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { dirname, join } from "node:path";
 import { ConfigError } from "../core/errors.ts";
-import { createTimeZone } from "../core/timezone.ts";
+import { createTimeZone, formatOffset } from "../core/timezone.ts";
 import { parseCliOverrides, parseEnvOverrides, type CliOverrides } from "./overrides.ts";
 import { DEFAULT_CONFIG, fileSchema, type FileConfig, type QuotaConfig } from "./schema.ts";
 
@@ -93,12 +93,6 @@ function validateTimeZone(timezone: string): void {
   } catch (cause) {
     throw new ConfigError(cause instanceof Error ? cause.message : String(cause), { cause });
   }
-}
-
-function formatOffset(offsetMinutes: number): string {
-  const sign = offsetMinutes < 0 ? "-" : "+";
-  const abs = Math.abs(offsetMinutes);
-  return `${sign}${String(Math.floor(abs / 60)).padStart(2, "0")}:${String(abs % 60).padStart(2, "0")}`;
 }
 
 function formatIssues(issues: ReadonlyArray<{ path: PropertyKey[]; message: string }>): string {

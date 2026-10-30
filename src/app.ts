@@ -1,0 +1,95 @@
+/**
+ * Object graph construction — the single place ocquota builds its
+ * collaborators: config -> connection -> repository -> window -> service.
+ * Commands receive a finished App (constructor injection all the way down);
+ * nothing here is business logic and nothing lives in module-level mutable
+ * state. `withApp` guarantees the connection closes even when a command throws.
+ */
+
+import pc from "picocolors";
+import { ConfigStore, type CliOverrides, type QuotaConfig } from "./config/config-store.ts";
+import { createTimeZone } from "./core/timezone.ts";
+import type { TimeZone } from "./core/time.ts";
+import { SqliteDatabase } from "./data/database.ts";
+import { SqliteUsageRepository } from "./data/sqlite-usage-repository.ts";
+import { QuotaService } from "./domain/quota-service.ts";
+import { createWindow } from "./domain/window.ts";
+import { FullRenderer } from "./render/full-renderer.ts";
+import { OneLineRenderer } from "./render/one-line-renderer.ts";
+import { ProgressBar } from "./render/progress-bar.ts";
+import type { Renderer, RendererColors } from "./render/renderer.ts";
+
+/** picocolors satisfies RendererColors structurally. */
+export const COLORS: RendererColors = pc;
+
+export interface App {
+  config: QuotaConfig;
+  db: SqliteDatabase;
+  repository: SqliteUsageRepository;
+  service: QuotaService;
+  timeZone: TimeZone;
+}
+
+/** Raw strings from cac; `dbPath` etc. are parsed by ConfigStore, the rest here. */
+export interface RawOptions {
+  db?: string | undefined;
+  window?: string | undefined;
+  limit?: string | undefined;
+  limitCost?: string | undefined;
+  metric?: string | undefined;
+  refresh?: string | undefined;
+  tz?: string | undefined;
+  days?: string | undefined;
+  n?: string | undefined;
+}
+
+export function buildApp(options: RawOptions): App {
+  const cliOverrides: CliOverrides = {
+    dbPath: options.db,
+    window: options.window,
+    limitTokens: options.limit,
+    limitCost: options.limitCost,
+    metric: options.metric,
+    refreshMs: options.refresh,
+    timezone: options.tz,
+  };
+  const config = new ConfigStore().load(cliOverrides);
+  const db = new SqliteDatabase(config.dbPath);
+  const timeZone = createTimeZone(config.timezone);
+  const repository = new SqliteUsageRepository(db);
+  const service = new QuotaService(
+    repository,
+    createWindow(config.window, timeZone),
+    { tokens: config.limitTokens, cost: config.limitCost },
+    config.metric,
+  );
+  return { config, db, repository, service, timeZone };
+}
+
+/** Wrap a command body so the connection closes on success *and* failure. */
+export function withApp(run: (app: App) => void): (options: RawOptions) => void {
+  return (options) => {
+    const app = buildApp(options);
+    try {
+      run(app);
+    } finally {
+      app.db.close();
+    }
+  };
+}
+
+export function fullRenderer(app: App): Renderer {
+  return new FullRenderer({
+    bar: new ProgressBar(app.config.barWidth),
+    colors: COLORS,
+    timeZone: app.timeZone,
+  });
+}
+
+export function oneLineRenderer(app: App): Renderer {
+  return new OneLineRenderer({ bar: new ProgressBar(app.config.barWidth), colors: COLORS });
+}
+
+export function writeLine(text: string): void {
+  process.stdout.write(`${text}\n`);
+}

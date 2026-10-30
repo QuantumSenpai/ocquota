@@ -75,10 +75,24 @@ const MONTHS = [
  * wall-clock date, so the result never depends on the machine's own timezone.
  */
 export function formatLocalDateTime(utcMs: number, timeZone: TimeZone): string {
-  const date = new Date(timeZone.toWallClockMs(utcMs));
-  const month = MONTHS[date.getUTCMonth()] ?? "";
-  const day = String(date.getUTCDate()).padStart(2, "0");
+  const date = wallDate(utcMs, timeZone);
   const hour = String(date.getUTCHours()).padStart(2, "0");
   const minute = String(date.getUTCMinutes()).padStart(2, "0");
-  return `${month} ${day} ${hour}:${minute}`;
+  return `${formatWallDate(date)} ${hour}:${minute}`;
+}
+
+/** "Oct 30" in the configured zone (day buckets, timelines). */
+export function formatLocalDate(utcMs: number, timeZone: TimeZone): string {
+  return formatWallDate(wallDate(utcMs, timeZone));
+}
+
+/** The instant rendered as a wall-clock date in `timeZone`. */
+function wallDate(utcMs: number, timeZone: TimeZone): Date {
+  return new Date(timeZone.toWallClockMs(utcMs));
+}
+
+function formatWallDate(date: Date): string {
+  const month = MONTHS[date.getUTCMonth()] ?? "";
+  const day = String(date.getUTCDate()).padStart(2, "0");
+  return `${month} ${day}`;
 }

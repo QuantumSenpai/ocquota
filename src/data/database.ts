@@ -2,21 +2,31 @@
  * Read-only access to a SQLite database. Owns the connection lifecycle and the
  * statement cache: every distinct SQL string is compiled once and reused, so
  * repeated calls are O(1) prepares. bun:sqlite types stay inside this module —
- * callers depend on the DatabaseConnection interface only.
+ * callers depend on the DatabaseConnection interface only. SQLITE_BUSY policy
+ * and error translation live in sqlite-errors.ts.
  */
 
 import { Database, type SQLQueryBindings, type Statement } from "bun:sqlite";
-import { DatabaseBusyError, DatabaseError } from "../core/errors.ts";
+import { BUSY_RETRY_DELAYS_MS, sleepSync, toDatabaseError } from "./sqlite-errors.ts";
+import { DatabaseError } from "../core/errors.ts";
+
+/**
+ * Named-parameter map (`$from` -> value). Named rather than positional on
+ * purpose: bun binds positional values by *textual order of the placeholders*,
+ * which silently corrupts a query whose first placeholder is `?3` (see
+ * usage-queries.ts). Named parameters are order-independent.
+ */
+export type SqlParams = Readonly<Record<string, string | number | boolean | null>>;
 
 export interface DatabaseConnection {
   /** File this connection reads; used in error messages. */
   readonly path: string;
-  /** SELECT producing many rows; `params` are bound positionally. */
-  all<T>(sql: string, params: readonly SQLQueryBindings[]): T[];
+  /** SELECT producing many rows; `params` are bound by name. */
+  all<T>(sql: string, params: SqlParams): T[];
   /** SELECT producing at most one row; null when there is none. */
-  get<T>(sql: string, params: readonly SQLQueryBindings[]): T | null;
+  get<T>(sql: string, params: SqlParams): T | null;
   /** EXPLAIN QUERY PLAN for `sql` as human-readable lines (diagnostics). */
-  explain(sql: string, params: readonly SQLQueryBindings[]): string[];
+  explain(sql: string, params: SqlParams): string[];
   close(): void;
 }
 
@@ -54,17 +64,17 @@ export class SqliteDatabase implements DatabaseConnection {
     this.db.exec("PRAGMA query_only = ON");
   }
 
-  all<T>(sql: string, params: readonly SQLQueryBindings[]): T[] {
-    return this.guard(sql, (statement) => statement.all(...params) as T[]);
+  all<T>(sql: string, params: SqlParams): T[] {
+    return this.guard(sql, (statement) => statement.all(params) as T[]);
   }
 
-  get<T>(sql: string, params: readonly SQLQueryBindings[]): T | null {
-    return this.guard(sql, (statement) => statement.get(...params) as T | null);
+  get<T>(sql: string, params: SqlParams): T | null {
+    return this.guard(sql, (statement) => statement.get(params) as T | null);
   }
 
-  explain(sql: string, params: readonly SQLQueryBindings[]): string[] {
+  explain(sql: string, params: SqlParams): string[] {
     const rows = this.guard(`EXPLAIN QUERY PLAN ${sql}`, (statement) => {
-      return statement.all(...params) as Array<{ detail: string }>;
+      return statement.all(params) as Array<{ detail: string }>;
     });
     return rows.map((row) => row.detail);
   }
@@ -86,32 +96,16 @@ export class SqliteDatabase implements DatabaseConnection {
     return compiled;
   }
 
+  /** Run `sql`, retrying briefly on SQLITE_BUSY before failing with a typed error. */
   private guard<T>(sql: string, run: (statement: CachedStatement) => T): T {
-    try {
-      return run(this.statement(sql));
-    } catch (cause) {
-      throw this.toDatabaseError(sql, cause);
+    for (let attempt = 0; ; attempt++) {
+      try {
+        return run(this.statement(sql));
+      } catch (cause) {
+        const busy = toDatabaseError(this.path, sql, cause);
+        if (busy.code !== "DB_BUSY" || attempt >= BUSY_RETRY_DELAYS_MS.length) throw busy;
+        sleepSync(BUSY_RETRY_DELAYS_MS[attempt] ?? 80);
+      }
     }
   }
-
-  private toDatabaseError(sql: string, cause: unknown): DatabaseError {
-    const code = sqliteErrorCode(cause);
-    if (code === "SQLITE_BUSY" || code === "SQLITE_LOCKED") {
-      return new DatabaseBusyError(this.path, { cause });
-    }
-    const firstLine = sql.trim().split("\n", 1)[0] ?? "query";
-    return new DatabaseError(
-      code ?? "DB_QUERY_FAILED",
-      `SQLite error ${code ?? "(unknown)"} while running: ${firstLine}`,
-      this.path,
-      { cause },
-    );
-  }
-}
-
-/** Extract SQLite's symbolic code (e.g. "SQLITE_BUSY") from a driver error. */
-function sqliteErrorCode(cause: unknown): string | null {
-  if (typeof cause !== "object" || cause === null || !("code" in cause)) return null;
-  const code: unknown = cause.code;
-  return typeof code === "string" ? code : null;
 }

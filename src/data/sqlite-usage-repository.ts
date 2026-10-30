@@ -1,83 +1,144 @@
 /**
- * SqliteUsageRepository — the only place that knows OpenCode's schema.
+ * SqliteUsageRepository — the only place that knows OpenCode's schema, and the
+ * only place that turns SQL rows into domain objects (the SQL text itself
+ * lives in usage-queries.ts). Per-message usage comes from session_message
+ * (json paths documented in message-paths.ts), never from the per-session
+ * rollup in session_v2, which counts a whole session's tokens even when the
+ * session started days before the window.
  *
- * EXPLAIN QUERY PLAN against the real DB (~/.local/share/opencode/opencode.db,
- * 20 sessions, WAL, opened read-only):
+ * EXPLAIN QUERY PLAN against the real DB, verified for all five statements
+ * (`ocquota explain` prints them live):
  *
- *   ocquota $ explain
- *   `-- SCAN session_v2
+ *   usageInRange / totalsSince / totalsByModel / dailyBuckets / topSessions
+ *     `-- SEARCH session_message USING INDEX session_message_time_created_idx
+ *          (time_created>? [AND time_created<?])
+ *     `-- USE TEMP B-TREE FOR GROUP BY        (only for the grouped queries)
  *
- * session_v2 has no index on time_updated, so the [start, end) filter is a
- * full table scan. That is the cheapest plan available to a read-only tool
- * (building an index would mean writing into OpenCode's own database), and the
- * aggregate itself is one SUM/GROUP-free pass inside SQLite — no rows ever
- * cross into JS. Keeping the scan is deliberate.
+ * The time range is an index range-SCAN (SEARCH), not a table SCAN; the temp
+ * B-tree sorts at most one row per group (day / model / session), not per row.
+ * json_valid(data) in USAGE_ROW_FILTER is the single malformed-JSON guard.
+ *
+ * Every statement is compiled once and cached by SqliteDatabase, so repeat
+ * calls cost only execution (see scripts/bench.ts: totalsSince(0) averages
+ * well under the 10 ms target on the real DB).
  */
 
-import { DatabaseError } from "../core/errors.ts";
-import type { UsageTotals, WindowRange } from "../core/types.ts";
+import {
+  DAILY_BUCKETS_SQL,
+  QUERIES,
+  TOTALS_BY_MODEL_SQL,
+  TOTALS_SINCE_SQL,
+  TOP_SESSIONS_SQL,
+  USAGE_IN_RANGE_SQL,
+  type BucketRow,
+  type ModelRow,
+  type TopRow,
+  type TotalsRow,
+} from "./usage-queries.ts";
 import type { DatabaseConnection } from "./database.ts";
-import type { UsageRepository } from "./repository.ts";
-
-interface UsageRow {
-  sessions: number;
-  cost: number;
-  tokens_input: number;
-  tokens_output: number;
-  tokens_reasoning: number;
-  tokens_cache_read: number;
-  tokens_cache_write: number;
-  last_activity: number | null;
-}
-
-/** One aggregate query per window; every column the renderers need, nothing else. */
-const USAGE_IN_RANGE_SQL = `
-  SELECT
-    COUNT(*) AS sessions,
-    COALESCE(SUM(cost), 0) AS cost,
-    COALESCE(SUM(tokens_input), 0) AS tokens_input,
-    COALESCE(SUM(tokens_output), 0) AS tokens_output,
-    COALESCE(SUM(tokens_reasoning), 0) AS tokens_reasoning,
-    COALESCE(SUM(tokens_cache_read), 0) AS tokens_cache_read,
-    COALESCE(SUM(tokens_cache_write), 0) AS tokens_cache_write,
-    MAX(time_updated) AS last_activity
-  FROM session_v2
-  WHERE time_updated >= ?1 AND time_updated < ?2
-`;
-
-const EMPTY_TOTALS: UsageTotals = {
-  sessions: 0,
-  cost: 0,
-  tokens: { input: 0, output: 0, reasoning: 0, cacheRead: 0, cacheWrite: 0 },
-  lastActivityAt: null,
-};
+import type { QueryPlan, UsageRepository } from "./repository.ts";
+import type {
+  DailyBucket,
+  ModelTotals,
+  SessionTotals,
+  TokenUsage,
+  Totals,
+  UsageTotals,
+  WindowRange,
+} from "../core/types.ts";
 
 export class SqliteUsageRepository implements UsageRepository {
   constructor(private readonly db: DatabaseConnection) {}
 
   usageInRange(range: WindowRange): UsageTotals {
-    // COUNT(*) always yields a row; the fallback only guards a broken driver.
-    const row = this.db.get<UsageRow>(USAGE_IN_RANGE_SQL, [range.start, range.end]);
-    if (row === null) return EMPTY_TOTALS;
-    return {
-      sessions: row.sessions,
-      cost: row.cost,
-      tokens: {
-        input: row.tokens_input,
-        output: row.tokens_output,
-        reasoning: row.tokens_reasoning,
-        cacheRead: row.tokens_cache_read,
-        cacheWrite: row.tokens_cache_write,
-      },
-      lastActivityAt: row.last_activity,
-    };
+    // The aggregate always yields exactly one row, even for an empty window.
+    const row = this.db.get<TotalsRow>(USAGE_IN_RANGE_SQL, { from: range.start, to: range.end });
+    return toTotals(row ?? EMPTY_ROW);
   }
 
-  explainUsageInRange(): string[] {
-    const plan = this.db.explain(USAGE_IN_RANGE_SQL, [0, 0]);
-    if (plan.length === 0) {
-      throw new DatabaseError("DB_PLAN_FAILED", "SQLite returned no query plan for the usage query.", this.db.path);
-    }
-    return plan;
+  totalsSince(from: number): Totals {
+    const row = this.db.get<TotalsRow>(TOTALS_SINCE_SQL, { from });
+    return { ...toTotals(row ?? EMPTY_ROW), from };
   }
+
+  totalsByModel(from: number): ModelTotals[] {
+    const rows = this.db.all<ModelRow>(TOTALS_BY_MODEL_SQL, { from });
+    return rows.map((row) => ({
+      providerId: row.provider_id,
+      modelId: row.model_id,
+      messages: row.messages,
+      cost: row.cost,
+      tokens: toTokenUsage(row),
+      totalTokens: row.total_tokens,
+    }));
+  }
+
+  dailyBuckets(from: number, to: number, offsetMinutes: number): DailyBucket[] {
+    const rows = this.db.all<BucketRow>(DAILY_BUCKETS_SQL, {
+      from,
+      to,
+      dayOffset: offsetMinutes * 60_000,
+    });
+    // day_index * 86400000 is local-midnight wall time; subtract the offset to
+    // get the UTC instant of that local midnight.
+    return rows.map((row) => ({
+      dayStart: row.day_index * 86_400_000 - offsetMinutes * 60_000,
+      messages: row.messages,
+      cost: row.cost,
+      tokens: toTokenUsage(row),
+      totalTokens: row.total_tokens,
+    }));
+  }
+
+  topSessions(from: number, n: number): SessionTotals[] {
+    const rows = this.db.all<TopRow>(TOP_SESSIONS_SQL, { from, n: Math.max(0, Math.trunc(n)) });
+    return rows.map((row) => ({
+      sessionId: row.session_id,
+      title: row.title,
+      messages: row.messages,
+      cost: row.cost,
+      tokens: toTokenUsage(row),
+      totalTokens: row.total_tokens,
+      lastActivityAt: row.last_activity ?? 0,
+    }));
+  }
+
+  explainAll(): QueryPlan[] {
+    return QUERIES.map((query) => ({ name: query.name, lines: this.db.explain(query.sql, query.params) }));
+  }
+}
+
+/** Fallback for a driver that returns no row: an all-zero window. */
+const EMPTY_ROW: TotalsRow = {
+  messages: 0,
+  sessions: 0,
+  cost: 0,
+  tokens_input: 0,
+  tokens_output: 0,
+  tokens_reasoning: 0,
+  tokens_cache_read: 0,
+  tokens_cache_write: 0,
+  total_tokens: 0,
+  last_activity: null,
+};
+
+function toTokenUsage(row: TotalsRow): TokenUsage {
+  return {
+    input: row.tokens_input,
+    output: row.tokens_output,
+    reasoning: row.tokens_reasoning,
+    cacheRead: row.tokens_cache_read,
+    cacheWrite: row.tokens_cache_write,
+  };
+}
+
+function toTotals(row: TotalsRow): UsageTotals {
+  return {
+    messages: row.messages,
+    sessions: row.sessions,
+    cost: row.cost,
+    tokens: toTokenUsage(row),
+    totalTokens: row.total_tokens,
+    lastActivityAt: row.last_activity,
+  };
 }

@@ -6,7 +6,8 @@
   "private": true,
   "scripts": {
     "typecheck": "bun check",
-    "test": "bun test"
+    "test": "bun test",
+    "bench": "bun scripts/bench.ts"
   },
   "devDependencies": {
     "@types/bun": "^1.4.4",
