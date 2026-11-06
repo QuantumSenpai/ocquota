@@ -1,12 +1,8 @@
-/**
- * Data-layer tests against real SQLite fixtures: the SQL, the row mapping and
- * the aggregate semantics, exercised through the production SqliteDatabase.
- *
- *   bun test
- */
-
 import { describe, expect, test } from "bun:test";
+import { createTimeZone } from "../src/core/timezone.ts";
 import { SqliteUsageRepository } from "../src/data/sqlite-usage-repository.ts";
+import { QuotaService } from "../src/domain/quota-service.ts";
+import { createWindow } from "../src/domain/window.ts";
 import { assistantData, withFixture, type UsageFixture } from "./helpers/fixture-db.ts";
 
 const T0 = Date.parse("2026-03-05T18:30:00.000Z"); // 2026-03-06 00:00 IST
@@ -21,7 +17,7 @@ describe("totalsSince", () => {
     withFixture((fx) => {
       fx.message({ data: assistantData({ input: 100, output: 20, reasoning: 5, cacheRead: 999, cacheWrite: 7, cost: 0.5 }), timeCreated: T0 });
       fx.message({ data: assistantData({ input: 1, output: 2, reasoning: 3, cacheRead: 4, cacheWrite: 5, cost: 0.25 }), timeCreated: T0 + 1_000 });
-      fx.message({ data: assistantData({}), timeCreated: T0 + 2_000 }); // error turn: no tokens
+      fx.message({ data: assistantData({}), timeCreated: T0 + 2_000 });
       fx.message({ data: '{"role":"user"}', type: "user", timeCreated: T0 + 3_000 });
 
       const totals = new SqliteUsageRepository(fx.db).totalsSince(0);
@@ -70,7 +66,7 @@ describe("totalsSince", () => {
       const totals = new SqliteUsageRepository(fx.db).totalsSince(0);
       expect(totals.messages).toBe(2);
       expect(totals.totalTokens).toBe(15);
-      expect(totals.lastActivityAt).toBe(T0 + 2_000); // the malformed row never wins
+      expect(totals.lastActivityAt).toBe(T0 + 2_000);
     });
   });
 });
@@ -114,10 +110,30 @@ describe("topSessions", () => {
       const top = new SqliteUsageRepository(fx.db).topSessions(0, 2);
       expect(top.map((s) => s.sessionId)).toEqual(["ses_heavy", "ses_titled"]);
       expect(top[0]?.totalTokens).toBe(60);
-      expect(top[0]?.messages).toBe(1); // malformed row excluded here too
+      expect(top[0]?.messages).toBe(1);
       expect(top[0]?.title).toBe("Heavy session");
       expect(top[0]?.lastActivityAt).toBe(T0 + 1_000);
-      expect(top[1]?.title).toBeNull(); // no session_v2 row -> LEFT JOIN null
+      expect(top[1]?.title).toBeNull();
+    });
+  });
+});
+
+describe("QuotaService.snapshot", () => {
+  test("reads the clock once so takenAt and range cannot straddle midnight", () => {
+    withFixture((fx) => {
+      let calls = 0;
+      const ticks = [T0 - 1, T0];
+      const service = new QuotaService(
+        new SqliteUsageRepository(fx.db),
+        createWindow("day", createTimeZone("Asia/Kolkata")),
+        { tokens: 1_000, cost: null },
+        "tokens",
+        () => ticks[Math.min(calls++, ticks.length - 1)] ?? T0,
+      );
+      const snap = service.snapshot();
+      expect(calls).toBe(1);
+      expect(snap.takenAt).toBeGreaterThanOrEqual(snap.range.start);
+      expect(snap.takenAt).toBeLessThan(snap.range.end);
     });
   });
 });

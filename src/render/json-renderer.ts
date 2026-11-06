@@ -1,8 +1,3 @@
-/**
- * JsonRenderer — machine-readable snapshot for scripts and jq. Keys are the
- * QuotaSnapshot fields, unchanged: no renaming, no nesting surprises.
- */
-
 import type { QuotaSnapshot } from "../core/types.ts";
 import type { Renderer } from "./renderer.ts";
 

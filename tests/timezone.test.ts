@@ -1,11 +1,3 @@
-/**
- * Window boundary correctness across DST transitions, with a fake clock.
- * These run in whatever zone the machine is in: every zone is passed
- * explicitly, so the assertions are TZ-independent.
- *
- *   bun test
- */
-
 import { describe, expect, test } from "bun:test";
 import { createTimeZone } from "../src/core/timezone.ts";
 import { nextDayStart, startOfDay, startOfMonth, startOfWeek } from "../src/core/time.ts";
@@ -76,7 +68,6 @@ describe("week windows (Monday start, ISO)", () => {
   });
 
   test("a Sunday belongs to the week that started the previous Monday", () => {
-    // 2026-10-25 is a Sunday; its week started Monday 2026-10-19.
     const start = startOfWeek(NY, utc("2026-10-25T15:00:00Z"));
     expect(new Date(start).toISOString()).toBe("2026-10-19T04:00:00.000Z");
   });
@@ -110,8 +101,15 @@ describe("month windows", () => {
 describe("TimeZone.earliestInstantAt (DST gap/overlap semantics)", () => {
   test("fall-back overlap picks the earlier instant (EDT, not EST)", () => {
     // 01:30 local happens twice on 2026-11-01 in New York.
-    const wall = utc("2026-11-01T01:30:00Z"); // wall-clock ms as if UTC
+    const wall = utc("2026-11-01T01:30:00Z");
     expect(new Date(NY.earliestInstantAt(wall)).toISOString()).toBe("2026-11-01T05:30:00.000Z");
+  });
+
+  test("fall-back overlap in UTC+ zones (Berlin, Sydney) picks the earlier instant", () => {
+    const berlin = createTimeZone("Europe/Berlin");
+    const sydney = createTimeZone("Australia/Sydney");
+    expect(new Date(berlin.earliestInstantAt(utc("2026-10-25T02:30:00Z"))).toISOString()).toBe("2026-10-25T00:30:00.000Z");
+    expect(new Date(sydney.earliestInstantAt(utc("2026-04-05T02:30:00Z"))).toISOString()).toBe("2026-04-04T15:30:00.000Z");
   });
 
   test("spring-forward gap moves forward to the first real instant", () => {

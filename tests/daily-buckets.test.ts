@@ -1,11 +1,3 @@
-/**
- * dailyBuckets must bucket by *real* local days: exact for fixed-offset zones
- * and for the 23-hour / 25-hour days of a DST zone. Both zones are passed
- * explicitly, so these assertions are independent of the machine's own zone.
- *
- *   bun test
- */
-
 import { describe, expect, test } from "bun:test";
 import { createTimeZone } from "../src/core/timezone.ts";
 import { offsetSegments } from "../src/core/time.ts";
@@ -64,6 +56,14 @@ describe("dailyBuckets · spring forward (America/New_York, 2026-03-08)", () => 
     expect(segments.map((s) => [new Date(s.end).toISOString(), s.offsetMinutes])).toEqual([
       ["2026-03-08T07:00:00.000Z", -300], // EST until 02:00 local
       ["2026-03-10T04:00:00.000Z", -240], // EDT after it
+    ]);
+  });
+
+  test("detects a transition inside a final partial hour before `to`", () => {
+    const segments = offsetSegments(NY, utc("2026-03-08T05:30:00Z"), utc("2026-03-08T07:20:00Z"));
+    expect(segments.map((s) => [new Date(s.end).toISOString(), s.offsetMinutes])).toEqual([
+      ["2026-03-08T07:00:00.000Z", -300],
+      ["2026-03-08T07:20:00.000Z", -240],
     ]);
   });
 });

@@ -1,16 +1,8 @@
-/**
- * Report blocks for the report commands (totals / models / daily / top). Pure
- * functions of domain objects: no clock, no SQL, no I/O. Column widths and
- * number formats live here so every report lines up and "385K" means the same
- * thing as in the bar.
- */
-
 import { formatCompact, formatCount, formatLocalDate, formatLocalDateTime, formatMoney } from "../core/format.ts";
 import type { TimeZone } from "../core/time.ts";
 import type { DailyBucket, ModelTotals, SessionTotals, TokenUsage, Totals } from "../core/types.ts";
 import type { RendererColors } from "./renderer.ts";
 
-/** Detail line for a TokenUsage; shared by every report that shows one. */
 function tokenDetail(tokens: TokenUsage, colors: RendererColors): string {
   return (
     `${colors.dim("input")} ${formatCount(tokens.input)}` +
@@ -21,19 +13,17 @@ function tokenDetail(tokens: TokenUsage, colors: RendererColors): string {
   );
 }
 
-/** Truncate to `width` columns with an ellipsis, then pad. O(width). */
+/** O(width). */
 function cell(text: string, width: number): string {
   return text.length <= width ? text.padEnd(width) : `${text.slice(0, width - 1)}…`;
 }
 
-/** Right-aligned integer column. */
 function num(value: number, width: number): string {
   return formatCount(value).padStart(width);
 }
 
 const EMPTY = "no usage yet.";
 
-/** Exact per-message totals for everything since `totals.from`. */
 export function renderTotals(totals: Totals, colors: RendererColors, timeZone: TimeZone): string {
   const header = `${colors.bold("totals")} ${colors.dim(`· since ${formatLocalDateTime(totals.from, timeZone)} · exact per-message`)}`;
   if (totals.messages === 0) return `${header}\n${colors.dim(EMPTY)}`;
@@ -46,7 +36,6 @@ export function renderTotals(totals: Totals, colors: RendererColors, timeZone: T
   ].join("\n");
 }
 
-/** Per-model rollup, heaviest first, with each model's share of the total. */
 export function renderModels(models: ModelTotals[], colors: RendererColors): string {
   if (models.length === 0) return colors.dim(EMPTY);
   const grandTotal = models.reduce((sum, model) => sum + model.totalTokens, 0);
@@ -68,7 +57,6 @@ export function renderModels(models: ModelTotals[], colors: RendererColors): str
   ].join("\n");
 }
 
-/** One row per local day, oldest first. */
 export function renderDaily(buckets: DailyBucket[], colors: RendererColors, timeZone: TimeZone): string {
   if (buckets.length === 0) return colors.dim(EMPTY);
   const head = `${cell("day", 11)}${"msgs".padStart(6)}${"tokens".padStart(11)}${"cost".padStart(10)}  detail`;
@@ -87,7 +75,6 @@ export function renderDaily(buckets: DailyBucket[], colors: RendererColors, time
   return [colors.dim(head), ...rows].join("\n");
 }
 
-/** The `n` heaviest sessions, heaviest first. */
 export function renderSessions(sessions: SessionTotals[], colors: RendererColors, timeZone: TimeZone): string {
   if (sessions.length === 0) return colors.dim(EMPTY);
   const head = `${cell("#", 3)}${cell("session", 42)}${"msgs".padStart(6)}${"tokens".padStart(11)}${"cost".padStart(10)}  last active`;

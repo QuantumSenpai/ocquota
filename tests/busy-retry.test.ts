@@ -1,17 +1,8 @@
-/**
- * SQLITE_BUSY policy: a short lock is waited out and retried (OpenCode writes
- * constantly while it works), a long one fails with a friendly DB_BUSY instead
- * of crashing or hanging.
- *
- *   bun test
- */
-
 import { describe, expect, test } from "bun:test";
 import { DatabaseError } from "../src/core/errors.ts";
 import { SqliteUsageRepository } from "../src/data/sqlite-usage-repository.ts";
 import { assistantData, withFixture, Fixture } from "./helpers/fixture-db.ts";
 
-/** Holds an EXCLUSIVE lock on the fixture DB for $OCQUOTA_LOCK_MS. */
 const LOCKER = `
   const { Database } = await import("bun:sqlite");
   const db = new Database(process.env.OCQUOTA_LOCK_DB);
@@ -45,9 +36,9 @@ describe("SQLITE_BUSY", () => {
       const elapsed = performance.now() - started;
       await locker.exited;
 
-      expect(totals.totalTokens).toBe(7); // nothing lost, nothing double-counted
-      expect(elapsed).toBeGreaterThanOrEqual(250); // waited past busy_timeout
-      expect(elapsed).toBeLessThan(3_000); // and stopped retrying promptly
+      expect(totals.totalTokens).toBe(7);
+      expect(elapsed).toBeGreaterThanOrEqual(250);
+      expect(elapsed).toBeLessThan(3_000);
     } finally {
       fixture.close();
     }
@@ -76,7 +67,6 @@ describe("SQLITE_BUSY", () => {
       expect(caught.message).toMatch(/locked by another process/);
       expect(performance.now() - started).toBeLessThan(5_000);
 
-      // Once the writer lets go, the very next read is exact again.
       expect(repository.totalsSince(0).totalTokens).toBe(7);
     });
   });

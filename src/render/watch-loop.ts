@@ -1,9 +1,3 @@
-/**
- * WatchLoop — refresh a rendering on an interval until interrupted. It takes a
- * render function, so it knows nothing about snapshots or databases; the CLI
- * stays pure wiring. A failing render (busy DB) is shown, not fatal.
- */
-
 import { friendlyMessage } from "../core/errors.ts";
 import type { RendererColors } from "./renderer.ts";
 
@@ -11,7 +5,6 @@ interface WatchLoopOptions {
   render: () => string;
   refreshMs: number;
   colors: RendererColors;
-  /** release whatever the loop borrowed (the DB connection) on shutdown */
   onClose: () => void;
 }
 
@@ -24,12 +17,14 @@ export class WatchLoop {
     this.options = options;
   }
 
-  /** Starts the loop and returns; SIGINT/SIGTERM end it. */
   start(): void {
     // Piped output: one shot, no ANSI spam.
     if (!process.stdout.isTTY) {
-      process.stdout.write(`${this.options.render()}\n`);
-      this.options.onClose();
+      try {
+        process.stdout.write(`${this.options.render()}\n`);
+      } finally {
+        this.options.onClose();
+      }
       return;
     }
     this.running = true;

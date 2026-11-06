@@ -1,10 +1,4 @@
 #!/usr/bin/env bun
-/**
- * ocquota CLI — thin wiring only: declare flags and commands, hand each one a
- * finished App, run. Every command body is one expression; the object graph is
- * built in app.ts and all formatting lives in render/.
- */
-
 import { cac } from "cac";
 import pkg from "../package.json";
 import { COLORS, buildApp, fullRenderer, oneLineRenderer, withApp, writeLine, type App, type RawOptions } from "./app.ts";
@@ -14,12 +8,10 @@ import { JsonRenderer } from "./render/json-renderer.ts";
 import { renderDaily, renderModels, renderSessions, renderTotals } from "./render/report-renderer.ts";
 import { WatchLoop } from "./render/watch-loop.ts";
 
-/** Build an action that prints one rendered report block. */
 function report(render: (app: App) => string): (options: RawOptions) => void {
   return withApp((app) => writeLine(render(app)));
 }
 
-/** Parse a small integer flag, or fall back to the default; friendly on garbage. */
 function intOption(raw: string | undefined, flag: string, fallback: number, max: number): number {
   if (raw === undefined || raw === "") return fallback;
   const value = Number(raw);
@@ -29,7 +21,6 @@ function intOption(raw: string | undefined, flag: string, fallback: number, max:
   return value;
 }
 
-/** Local-day span for `daily`: N midnights back through the end of today. */
 function dailyRange(app: App, days: number): { from: number; to: number } {
   const now = Date.now();
   return {

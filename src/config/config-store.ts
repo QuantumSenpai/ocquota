@@ -1,12 +1,4 @@
-/**
- * ConfigStore — loads ~/.config/ocquota/config.json, validates it with zod,
- * layers environment (OCQUOTA_*) and CLI overrides on top, and writes a
- * defaults file on first run so there is always something to edit.
- *
- * Precedence: CLI > env > config file > built-in defaults.
- * The file is validated by zod; env/CLI strings go through the typed parsers in
- * overrides.ts, so every layer rejects bad input naming the knob at fault.
- */
+/** Precedence: CLI > env (OCQUOTA_*) > ~/.config/ocquota/config.json > defaults. */
 
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { homedir } from "node:os";
@@ -20,7 +12,6 @@ export type { CliOverrides } from "./overrides.ts";
 export type { QuotaConfig } from "./schema.ts";
 
 interface ConfigStoreOptions {
-  /** path to the JSON config file (default: ~/.config/ocquota/config.json) */
   configPath?: string | undefined;
   env?: Readonly<Record<string, string | undefined>> | undefined;
   homeDir?: string | undefined;
@@ -71,7 +62,6 @@ function defaultConfigPath(homeDir: string): string {
   return join(homeDir, ".config", "ocquota", "config.json");
 }
 
-/** FileConfig -> overrides, translating the deprecated fixed-offset key. */
 function fromFile(file: FileConfig): Partial<QuotaConfig> {
   const out: Partial<QuotaConfig> = {};
   if (file.dbPath !== undefined) out.dbPath = file.dbPath;
@@ -86,7 +76,6 @@ function fromFile(file: FileConfig): Partial<QuotaConfig> {
   return out;
 }
 
-/** Fail fast with a friendly message instead of a crash inside Intl. */
 function validateTimeZone(timezone: string): void {
   try {
     createTimeZone(timezone);
@@ -104,12 +93,11 @@ function formatIssues(issues: ReadonlyArray<{ path: PropertyKey[]; message: stri
     .join("\n");
 }
 
-/** First run: persist defaults so the user has an editable file. Never fatal. */
 function writeDefaultsFile(configPath: string): void {
   try {
     mkdirSync(dirname(configPath), { recursive: true });
     writeFileSync(configPath, `${JSON.stringify(DEFAULT_CONFIG, null, 2)}\n`, { flag: "wx" });
   } catch {
-    /* convenience only: a read-only HOME must not break the CLI */
+    /* ignore read-only HOME */
   }
 }

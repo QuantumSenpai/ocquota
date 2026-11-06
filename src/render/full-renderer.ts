@@ -1,7 +1,3 @@
-/**
- * FullRenderer — the default multi-line block: window, bar, totals, reset.
- */
-
 import { formatAgo, formatCount, formatDuration, formatLocalDateTime, formatMoney, formatPercent } from "../core/format.ts";
 import type { TimeZone } from "../core/time.ts";
 import type { QuotaSnapshot } from "../core/types.ts";
@@ -11,7 +7,6 @@ import { quotaColor, type Renderer, type RendererColors } from "./renderer.ts";
 interface FullRendererOptions {
   bar: ProgressBar;
   colors: RendererColors;
-  /** zone used to print window bounds and the reset time */
   timeZone: TimeZone;
 }
 

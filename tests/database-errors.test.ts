@@ -1,18 +1,15 @@
-/**
- * Failure modes the CLI must survive with a friendly error, plus the read-only
- * guarantee: ocquota must never modify OpenCode's database file.
- *
- *   bun test
- */
-
 import { describe, expect, test } from "bun:test";
 import { createHash } from "node:crypto";
-import { mkdtempSync, readFileSync, rmSync, readdirSync } from "node:fs";
+import { mkdtempSync, readFileSync, rmSync, readdirSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { DatabaseError } from "../src/core/errors.ts";
+import { COLORS } from "../src/app.ts";
+import { ConfigStore } from "../src/config/config-store.ts";
+import { parseCliOverrides, parseEnvOverrides } from "../src/config/overrides.ts";
+import { ConfigError, DatabaseError } from "../src/core/errors.ts";
 import { SqliteDatabase } from "../src/data/database.ts";
 import { SqliteUsageRepository } from "../src/data/sqlite-usage-repository.ts";
+import { WatchLoop } from "../src/render/watch-loop.ts";
 import { assistantData, withFixture } from "./helpers/fixture-db.ts";
 
 const code = (run: () => unknown): string => {
@@ -37,8 +34,6 @@ describe("database open failures", () => {
   });
 
   test("a database from another schema version fails with DB_SCHEMA_MISSING", () => {
-    // Same file shape, none of ocquota's tables: what a future OpenCode
-    // migration would look like from our side.
     withFixture((fixture) => {
       const repository = new SqliteUsageRepository(fixture.db);
       expect(code(() => repository.usageInRange({ start: 0, end: 1 }))).toBe("DB_SCHEMA_MISSING");
@@ -66,5 +61,44 @@ describe("read-only guarantee", () => {
       const siblings = readdirSync(join(fixture.path, ".."));
       expect(siblings.filter((name) => name.endsWith("-wal") || name.endsWith("-journal"))).toEqual([]);
     });
+  });
+});
+
+describe("config & watch cleanup edge cases", () => {
+  test("numeric-coerced CLI flags and whitespace-only values fail with ConfigError", () => {
+    const dir = mkdtempSync(join(tmpdir(), "ocquota-cfg-"));
+    try {
+      const configPath = join(dir, "config.json");
+      const store = new ConfigStore({ configPath, env: {} });
+      expect(() => store.load({ timezone: 500 as unknown as string })).toThrow(ConfigError);
+      expect(() => parseCliOverrides({ limitCost: "   " })).toThrow(ConfigError);
+      expect(() => parseEnvOverrides({ OCQUOTA_LIMIT_COST: "   " })).toThrow(ConfigError);
+      writeFileSync(configPath, JSON.stringify({ dbPath: "   " }));
+      expect(() => store.load()).toThrow(ConfigError);
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  test("WatchLoop closes the resource in non-TTY mode even when render throws", () => {
+    const prevIsTTY = process.stdout.isTTY;
+    process.stdout.isTTY = false;
+    let closed = false;
+    try {
+      const loop = new WatchLoop({
+        render: () => {
+          throw new Error("boom");
+        },
+        refreshMs: 1_000,
+        colors: COLORS,
+        onClose: () => {
+          closed = true;
+        },
+      });
+      expect(() => loop.start()).toThrow("boom");
+      expect(closed).toBe(true);
+    } finally {
+      process.stdout.isTTY = prevIsTTY;
+    }
   });
 });

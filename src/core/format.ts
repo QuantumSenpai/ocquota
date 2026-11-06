@@ -1,8 +1,3 @@
-/**
- * Number / money / percent / duration formatting shared by every renderer, so
- * "385K" or "8h 46m" means the same thing everywhere. All functions are O(1).
- */
-
 import type { TimeZone } from "./time.ts";
 
 export function clamp(value: number, min: number, max: number): number {
@@ -11,12 +6,10 @@ export function clamp(value: number, min: number, max: number): number {
 
 const COUNTER = new Intl.NumberFormat("en-US");
 
-/** 1234567 -> "1,234,567". */
 export function formatCount(value: number): string {
   return COUNTER.format(Math.round(value));
 }
 
-/** 1234567 -> "1.2M", 12345 -> "12.3K", 999 -> "999". Compact labels for bars. */
 export function formatCompact(value: number): string {
   const abs = Math.abs(value);
   if (abs >= 1e9) return trimZero(value / 1e9) + "B";
@@ -29,21 +22,19 @@ function trimZero(value: number): string {
   return value.toFixed(1).replace(/\.0$/, "");
 }
 
-/** USD; sub-cent amounts keep four decimals so free-model spend is visible. */
+/** Sub-cent amounts keep 4 decimals so small spend is visible. */
 export function formatMoney(usd: number): string {
   if (usd === 0) return "$0.00";
   if (usd < 0.01) return `$${usd.toFixed(4)}`;
   return `$${usd.toFixed(2)}`;
 }
 
-/** 0.413 -> "41.3%". */
 export function formatPercent(fraction: number): string {
   return `${(fraction * 100).toFixed(1)}%`;
 }
 
 const MS_PER_SECOND = 1_000;
 
-/** 8h46m left -> "8h 46m". Zero/negative reads "now" (window already rolled over). */
 export function formatDuration(ms: number): string {
   if (ms <= 0) return "now";
   const totalSeconds = Math.floor(ms / MS_PER_SECOND);
@@ -57,7 +48,6 @@ export function formatDuration(ms: number): string {
   return `${seconds}s`;
 }
 
-/** "3m 12s ago" / "just now" / "never". */
 export function formatAgo(thenMs: number | null, nowMs: number): string {
   if (thenMs === null) return "never";
   const delta = nowMs - thenMs;
@@ -70,10 +60,7 @@ const MONTHS = [
   "Jul", "Aug", "Sep", "Oct", "Nov", "Dec",
 ] as const;
 
-/**
- * "Oct 30 15:13" in the configured zone. Built from UTC getters on a
- * wall-clock date, so the result never depends on the machine's own timezone.
- */
+/** Uses UTC getters on wall-clock ms so host timezone never affects output. */
 export function formatLocalDateTime(utcMs: number, timeZone: TimeZone): string {
   const date = wallDate(utcMs, timeZone);
   const hour = String(date.getUTCHours()).padStart(2, "0");
@@ -81,12 +68,10 @@ export function formatLocalDateTime(utcMs: number, timeZone: TimeZone): string {
   return `${formatWallDate(date)} ${hour}:${minute}`;
 }
 
-/** "Oct 30" in the configured zone (day buckets, timelines). */
 export function formatLocalDate(utcMs: number, timeZone: TimeZone): string {
   return formatWallDate(wallDate(utcMs, timeZone));
 }
 
-/** The instant rendered as a wall-clock date in `timeZone`. */
 function wallDate(utcMs: number, timeZone: TimeZone): Date {
   return new Date(timeZone.toWallClockMs(utcMs));
 }

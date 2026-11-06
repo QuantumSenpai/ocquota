@@ -1,19 +1,4 @@
 #!/usr/bin/env bun
-/**
- * Benchmark of the two shapes of query ocquota runs, against the real OpenCode
- * database, 100 runs each after one warm-up:
- *
- *   all-time  totalsSince(0)             worst case: every message ever written
- *   window    totalsSince(window start)  what bar / watch / totals actually run
- *
- * Gates leave room for a busy machine but still catch a planner regression:
- * all-time < 30 ms, window < 5 ms.
- *
- *   bun scripts/bench.ts            (OCQUOTA_DB overrides the database path)
- *
- * Exits 0 on PASS, 1 on FAIL, so it can gate a release.
- */
-
 import { homedir } from "node:os";
 import { join } from "node:path";
 import { SqliteDatabase } from "../src/data/database.ts";

@@ -1,11 +1,3 @@
-/**
- * Object graph construction — the single place ocquota builds its
- * collaborators: config -> connection -> repository -> window -> service.
- * Commands receive a finished App (constructor injection all the way down);
- * nothing here is business logic and nothing lives in module-level mutable
- * state. `withApp` guarantees the connection closes even when a command throws.
- */
-
 import pc from "picocolors";
 import { ConfigStore, type CliOverrides, type QuotaConfig } from "./config/config-store.ts";
 import { createTimeZone } from "./core/timezone.ts";
@@ -19,7 +11,6 @@ import { OneLineRenderer } from "./render/one-line-renderer.ts";
 import { ProgressBar } from "./render/progress-bar.ts";
 import type { Renderer, RendererColors } from "./render/renderer.ts";
 
-/** picocolors satisfies RendererColors structurally. */
 export const COLORS: RendererColors = pc;
 
 export interface App {
@@ -30,7 +21,6 @@ export interface App {
   timeZone: TimeZone;
 }
 
-/** Raw strings from cac; `dbPath` etc. are parsed by ConfigStore, the rest here. */
 export interface RawOptions {
   db?: string | undefined;
   window?: string | undefined;
@@ -66,7 +56,6 @@ export function buildApp(options: RawOptions): App {
   return { config, db, repository, service, timeZone };
 }
 
-/** Wrap a command body so the connection closes on success *and* failure. */
 export function withApp(run: (app: App) => void): (options: RawOptions) => void {
   return (options) => {
     const app = buildApp(options);

@@ -1,14 +1,7 @@
-/**
- * CLI and environment (OCQUOTA_*) overrides, parsed with the same typed
- * parsers as the config file so every layer rejects bad input the same way.
- * Precedence is applied by ConfigStore: CLI > env > file > defaults.
- */
-
 import { ConfigError } from "../core/errors.ts";
 import { QUOTA_METRICS, WINDOW_KINDS } from "../core/types.ts";
 import type { QuotaConfig } from "./schema.ts";
 
-/** Raw strings from the command line; this module owns the parsing. */
 export interface CliOverrides {
   dbPath?: string | undefined;
   window?: string | undefined;
@@ -46,7 +39,6 @@ export function parseEnvOverrides(env: Readonly<Record<string, string | undefine
   return out;
 }
 
-/** Copies `raw` into `target[key]` when present, after parsing. O(1). */
 function take<K extends keyof QuotaConfig>(
   target: PartialConfig,
   key: K,
@@ -55,7 +47,7 @@ function take<K extends keyof QuotaConfig>(
   parse: (raw: string, setting: string) => QuotaConfig[K],
 ): void {
   if (raw === undefined || raw === "") return;
-  target[key] = parse(raw, setting);
+  target[key] = parse(String(raw), setting);
 }
 
 function parseNonEmpty(raw: string, setting: string): string {
@@ -77,7 +69,7 @@ function parseBarWidth(raw: string, setting: string): number {
 
 function parseInteger(raw: string, setting: string, accept: (n: number) => boolean): number {
   const value = Number(raw);
-  if (!Number.isFinite(value) || !Number.isInteger(value) || !accept(value)) {
+  if (raw.trim() === "" || !Number.isFinite(value) || !Number.isInteger(value) || !accept(value)) {
     throw new ConfigError(`${setting} expects a whole number in range, got "${raw}".`);
   }
   return value;
@@ -90,11 +82,10 @@ function parseEnumOf<T extends string>(allowed: readonly T[]) {
   };
 }
 
-/** "none" explicitly clears a cost cap. */
 function parseCost(raw: string, setting: string): number | null {
   if (raw === "none") return null;
   const value = Number(raw);
-  if (!Number.isFinite(value) || value < 0) {
+  if (raw.trim() === "" || !Number.isFinite(value) || value < 0) {
     throw new ConfigError(`${setting} expects a non-negative number or "none", got "${raw}".`);
   }
   return value;

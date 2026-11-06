@@ -1,17 +1,11 @@
-/**
- * TimeZone implementations. The interface and the boundary math live in
- * time.ts; this file only answers "what is the offset at this instant?" — the
- * piece that makes DST-correct windows possible.
- */
-
 import { MS_PER_HOUR, MS_PER_MINUTE, type TimeZone } from "./time.ts";
 
-/** Offsets on Earth span -12h..+14h; ±16h brackets every possible answer. */
+/** ±16h brackets all UTC offsets (-12h..+14h). */
 const OFFSET_SEARCH_SLACK_MS = 16 * MS_PER_HOUR;
 
 class IanaTimeZone implements TimeZone {
   readonly id: string;
-  /** Formatter cache: constructing Intl.DateTimeFormat is the expensive part. */
+  /** Caches Intl.DateTimeFormat (expensive to construct). */
   private readonly formatters = new Map<string, Intl.DateTimeFormat>();
 
   constructor(id: string) {
@@ -20,9 +14,8 @@ class IanaTimeZone implements TimeZone {
 
   offsetMinutesAt(utcMs: number): number {
     const wall = wallClockFields(this.formatter().formatToParts(new Date(utcMs)));
-    // Read the same wall clock as if it were UTC, then diff against the instant.
     const asIfUtc = Date.UTC(wall.year, wall.month - 1, wall.day, wall.hour, wall.minute, wall.second);
-    const wholeSeconds = Math.trunc(utcMs / 1_000) * 1_000;  // offsets are minute-granular
+    const wholeSeconds = Math.trunc(utcMs / 1_000) * 1_000; // offsets are minute-granular
     return Math.round((asIfUtc - wholeSeconds) / MS_PER_MINUTE);
   }
 
@@ -31,15 +24,15 @@ class IanaTimeZone implements TimeZone {
   }
 
   earliestInstantAt(wallMs: number): number {
-    // Fast path: no DST transition nearby, so the algebraic answer is exact.
-    // Verified by checking it is the *first* crossing, not a neighbour inside
-    // a repeated (fall-back) hour.
-    const guess = wallMs - this.offsetMinutesAt(wallMs) * MS_PER_MINUTE;
-    if (this.toWallClockMs(guess) >= wallMs && this.toWallClockMs(guess - 1) < wallMs) return guess;
+    // Probe pre-transition offset first so fall-back overlaps pick the earlier instant.
+    const rough = wallMs - this.offsetMinutesAt(wallMs) * MS_PER_MINUTE;
+    for (const guess of [wallMs - this.offsetMinutesAt(rough - 2 * MS_PER_HOUR) * MS_PER_MINUTE, rough]) {
+      if (this.toWallClockMs(guess) >= wallMs && this.toWallClockMs(guess - 1) < wallMs) return guess;
+    }
     return this.searchEarliest(wallMs);
   }
 
-  /** Binary search for the first instant at/after `wallMs`. ~27 Intl calls worst case. */
+  /** O(log range) binary search (~27 Intl calls) when `wallMs` is in a DST gap. */
   private searchEarliest(wallMs: number): number {
     let low = wallMs - OFFSET_SEARCH_SLACK_MS;
     let high = wallMs + OFFSET_SEARCH_SLACK_MS;
@@ -65,7 +58,6 @@ class IanaTimeZone implements TimeZone {
   }
 }
 
-/** A constant offset ("+05:30" style). No DST by construction. */
 class FixedTimeZone implements TimeZone {
   readonly id: string;
   private readonly offsetMinutes: number;
@@ -88,7 +80,6 @@ class FixedTimeZone implements TimeZone {
   }
 }
 
-/** Accepts an IANA name or a "+05:30"/"-0800" offset; throws a friendly error otherwise. */
 export function createTimeZone(id: string): TimeZone {
   const fixed = parseOffset(id);
   if (fixed !== null) return new FixedTimeZone(fixed);
@@ -100,7 +91,6 @@ export function createTimeZone(id: string): TimeZone {
   return new IanaTimeZone(id);
 }
 
-/** Numeric calendar fields out of Intl parts; ignores literals. */
 function wallClockFields(parts: Intl.DateTimeFormatPart[]): WallClockFields {
   const field = (type: Intl.DateTimeFormatPartTypes, fallback: number): number => {
     const part = parts.find((p) => p.type === type);
@@ -110,7 +100,7 @@ function wallClockFields(parts: Intl.DateTimeFormatPart[]): WallClockFields {
     year: field("year", 0),
     month: field("month", 1),
     day: field("day", 1),
-    // h23 should never emit 24, but some ICU versions do at midnight.
+    // Guard against ICU builds emitting "24" at midnight despite h23.
     hour: field("hour", 0) % 24,
     minute: field("minute", 0),
     second: field("second", 0),
@@ -141,12 +131,10 @@ function isValidTimeZone(id: string): boolean {
   }
 }
 
-/** The machine's own zone, e.g. "Asia/Calcutta". */
 export function systemTimeZoneId(): string {
   return Intl.DateTimeFormat().resolvedOptions().timeZone;
 }
 
-/** "+05:30" / "-08:00"; the one place an offset becomes a string. */
 export function formatOffset(offsetMinutes: number): string {
   const sign = offsetMinutes < 0 ? "-" : "+";
   const abs = Math.abs(offsetMinutes);

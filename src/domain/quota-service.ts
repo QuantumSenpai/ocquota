@@ -1,16 +1,9 @@
-/**
- * QuotaService — the single producer of QuotaSnapshot. One snapshot costs one
- * aggregated SQL query over session_message plus O(1) arithmetic; it never
- * iterates rows and knows nothing about SQL.
- */
 import type { QuotaMetric, QuotaSnapshot, WindowRange } from "../core/types.ts";
 import type { UsageRepository } from "../data/repository.ts";
 import type { WindowStrategy } from "./window.ts";
 
 interface QuotaLimits {
-  /** tokens allowed per window; the primary limit when metric === "tokens" */
   tokens: number;
-  /** USD allowed per window; the primary limit when metric === "cost" */
   cost: number | null;
 }
 
@@ -23,7 +16,6 @@ export class QuotaService {
     private readonly clock: () => number = Date.now,
   ) {}
 
-  /** The quota window right now (`[start, end)`); what a snapshot would cover. */
   range(): WindowRange {
     return this.window.range(this.clock());
   }
@@ -31,7 +23,7 @@ export class QuotaService {
   /** O(1) caller-side work: one SQL aggregate for the window, then arithmetic. */
   snapshot(): QuotaSnapshot {
     const takenAt = this.clock();
-    const range = this.range();
+    const range = this.window.range(takenAt);
     const totals = this.repository.usageInRange(range);
     const totalTokens = totals.totalTokens;
     const used = this.metric === "cost" ? totals.cost : totalTokens;

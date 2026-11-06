@@ -1,26 +1,7 @@
 /**
- * SqliteUsageRepository — the only place that knows OpenCode's schema, and the
- * only place that turns SQL rows into domain objects (the SQL text itself
- * lives in usage-queries.ts). Per-message usage comes from session_message
- * (json paths documented in message-paths.ts), never from the per-session
- * rollup in session_v2, which counts a whole session's tokens even when the
- * session started days before the window.
- *
- * EXPLAIN QUERY PLAN against the real DB, verified for all five statements
- * (`ocquota explain` prints them live):
- *
- *   usageInRange / totalsSince / totalsByModel / dailyBuckets / topSessions
- *     `-- SEARCH session_message USING INDEX session_message_time_created_idx
- *          (time_created>? [AND time_created<?])
- *     `-- USE TEMP B-TREE FOR GROUP BY        (only for the grouped queries)
- *
- * The time range is an index range-SCAN (SEARCH), not a table SCAN; the temp
- * B-tree sorts at most one row per group (day / model / session), not per row.
- * json_valid(data) in USAGE_ROW_FILTER is the single malformed-JSON guard.
- *
- * Every statement is compiled once and cached by SqliteDatabase, so repeat
- * calls cost only execution (see scripts/bench.ts: totalsSince(0) averages
- * well under the 10 ms target on the real DB).
+ * Reads per-message usage from `session_message` (never `session_v2`, which
+ * rolls up entire sessions across window boundaries). All queries use
+ * `session_message_time_created_idx` range scans.
  */
 
 import {
@@ -53,7 +34,6 @@ export class SqliteUsageRepository implements UsageRepository {
   constructor(private readonly db: DatabaseConnection) {}
 
   usageInRange(range: WindowRange): UsageTotals {
-    // The aggregate always yields exactly one row, even for an empty window.
     const row = this.db.get<TotalsRow>(USAGE_IN_RANGE_SQL, { from: range.start, to: range.end });
     return toTotals(row ?? EMPTY_ROW);
   }
@@ -79,8 +59,7 @@ export class SqliteUsageRepository implements UsageRepository {
     const segments = offsetSegments(timeZone, from, to);
     if (segments.length === 0) return [];
     const rows = this.db.all<BucketRow>(dailyBucketsSql(segments), dailyParams(from, to, segments));
-    // day_index counts local calendar days since the epoch; the UTC instant of
-    // that local midnight is its first representable instant (DST-gap safe).
+    // earliestInstantAt resolves local midnight safely even if 00:00 falls in a DST gap.
     return rows.map((row) => ({
       dayStart: timeZone.earliestInstantAt(row.day_index * MS_PER_DAY),
       messages: row.messages,
@@ -108,7 +87,6 @@ export class SqliteUsageRepository implements UsageRepository {
   }
 }
 
-/** Fallback for a driver that returns no row: an all-zero window. */
 const EMPTY_ROW: TotalsRow = {
   messages: 0,
   sessions: 0,

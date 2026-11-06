@@ -1,8 +1,3 @@
-/**
- * OneLineRenderer — a single status line, meant for tmux status bars and
- * `watch -n` style prompts.
- */
-
 import type { QuotaSnapshot } from "../core/types.ts";
 import { formatCompact, formatDuration, formatMoney, formatPercent } from "../core/format.ts";
 import { quotaColor, type Renderer, type RendererColors } from "./renderer.ts";

@@ -1,19 +1,4 @@
 #!/usr/bin/env bun
-/**
- * Scale check: do the window queries stay fast on a database far larger than
- * the current real one? Seeds a throwaway DB (see scale-fixture.ts) with
- * 200,000 assistant messages over 90 days, then benchmarks the statements the
- * CLI runs against a *window*:
- *
- *   totalsSince / totalsByModel / topSessions   hard gate < 20 ms
- *   dailyBuckets(last 7 days)                   documented deviation (printed)
- *   dailyBuckets(last 1 day), totalsSince(0)    informational
- *
- *   bun scripts/bench-scale.ts
- *     OCQUOTA_SCALE_ROWS=200000 OCQUOTA_SCALE_DAYS=90
- *     OCQUOTA_SCALE_KEEP=1      keep the seeded database for inspection
- */
-
 import { rmSync, statSync } from "node:fs";
 import { SqliteDatabase } from "../src/data/database.ts";
 import { SqliteUsageRepository } from "../src/data/sqlite-usage-repository.ts";
@@ -26,7 +11,6 @@ const DAYS = Number(process.env["OCQUOTA_SCALE_DAYS"] ?? 90);
 const SESSIONS = 400;
 const RUNS = 20;
 const TARGET_MS = 20;
-/** Regression ceiling for the documented deviation; pre-fix min was ~100 ms. */
 const SANITY_MIN_MS = 60;
 const NOW = Date.now();
 
@@ -34,9 +18,8 @@ const fixture = seedScaleFixture(ROWS, DAYS, SESSIONS, NOW);
 const db = new SqliteDatabase(fixture.path);
 const repository = new SqliteUsageRepository(db);
 const timeZone = createTimeZone(systemTimeZoneId());
-/** What `bar` / `watch` / `totals` run against: today's local-day window. */
 const windowStart = startOfDayOffset(timeZone, NOW, 0);
-const daysFrom = startOfDayOffset(timeZone, NOW, 6); // what `daily --days 7` scans
+const daysFrom = startOfDayOffset(timeZone, NOW, 6);
 const daysTo = nextDayStart(timeZone, NOW);
 
 type Kind = "gate" | "deviation" | "info";
@@ -55,7 +38,6 @@ const scenarios: Scenario[] = [
   { label: "totalsSince(0)  [all time]", kind: "info", run: () => repository.totalsSince(0) },
 ];
 
-/** Rows (and therefore JSON bytes) each daily window actually scans. */
 const countRows = (from: number, to: number): number =>
   db.get<{ n: number }>(
     "SELECT COUNT(*) AS n FROM session_message WHERE time_created >= $from AND time_created < $to",
@@ -73,7 +55,7 @@ const lines: string[] = [
 
 let failed = false;
 for (const scenario of scenarios) {
-  scenario.run(); // warm-up
+  scenario.run();
   const samples: number[] = [];
   for (let run = 0; run < RUNS; run += 1) {
     const started = performance.now();

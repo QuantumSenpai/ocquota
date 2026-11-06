@@ -1,37 +1,21 @@
-/**
- * Read-only access to a SQLite database. Owns the connection lifecycle and the
- * statement cache: every distinct SQL string is compiled once and reused, so
- * repeated calls are O(1) prepares. bun:sqlite types stay inside this module —
- * callers depend on the DatabaseConnection interface only. SQLITE_BUSY policy
- * and error translation live in sqlite-errors.ts.
- */
+/** Read-only SQLite connection with O(1) prepared-statement caching. */
 
 import { Database, type SQLQueryBindings, type Statement } from "bun:sqlite";
 import { BUSY_RETRY_DELAYS_MS, sleepSync, toDatabaseError } from "./sqlite-errors.ts";
 import { DatabaseError } from "../core/errors.ts";
 
-/**
- * Named-parameter map (`$from` -> value). Named rather than positional on
- * purpose: bun binds positional values by *textual order of the placeholders*,
- * which silently corrupts a query whose first placeholder is `?3` (see
- * usage-queries.ts). Named parameters are order-independent.
- */
+/** Named params (`$from`): bun:sqlite binds `?N` by textual order, which breaks dailyBucketsSql. */
 export type SqlParams = Readonly<Record<string, string | number | boolean | null>>;
 
 export interface DatabaseConnection {
-  /** File this connection reads; used in error messages. */
   readonly path: string;
-  /** SELECT producing many rows; `params` are bound by name. */
   all<T>(sql: string, params: SqlParams): T[];
-  /** SELECT producing at most one row; null when there is none. */
   get<T>(sql: string, params: SqlParams): T | null;
-  /** EXPLAIN QUERY PLAN for `sql` as human-readable lines (diagnostics). */
   explain(sql: string, params: SqlParams): string[];
   close(): void;
 }
 
 interface OpenOptions {
-  /** how long SQLite waits for a competing writer before raising SQLITE_BUSY */
   busyTimeoutMs?: number | undefined;
 }
 
@@ -41,7 +25,6 @@ const DEFAULT_BUSY_TIMEOUT_MS = 250;
 
 export class SqliteDatabase implements DatabaseConnection {
   private readonly db: Database;
-  /** O(1) statement reuse: sql text -> compiled statement. */
   private readonly statements = new Map<string, CachedStatement>();
   readonly path: string;
   private closed = false;
@@ -49,7 +32,7 @@ export class SqliteDatabase implements DatabaseConnection {
   constructor(path: string, options: OpenOptions = {}) {
     this.path = path;
     try {
-      // readonly + create:false: this process can never write or lock OpenCode out.
+      // readonly + create:false prevents any write or lock against OpenCode.
       this.db = new Database(path, { readonly: true, create: false });
     } catch (cause) {
       throw new DatabaseError(
@@ -59,12 +42,7 @@ export class SqliteDatabase implements DatabaseConnection {
         { cause },
       );
     }
-    // All three pragmas are connection-local: none of them writes to
-    // OpenCode's files. temp_store=MEMORY keeps GROUP BY's sorter in RAM
-    // instead of spilling it to a temp file — measured 97 ms -> 51 ms on a
-    // 7-day window of a 200k-row fixture. Memory stays bounded by the number
-    // of groups (a handful for daily/models, one per session for top), not by
-    // the number of rows scanned.
+    // Connection-local pragmas; temp_store=MEMORY keeps GROUP BY B-trees in RAM.
     const busyTimeout = Math.max(0, Math.trunc(options.busyTimeoutMs ?? DEFAULT_BUSY_TIMEOUT_MS));
     this.db.exec(`PRAGMA busy_timeout = ${busyTimeout}`);
     this.db.exec("PRAGMA temp_store = MEMORY");
@@ -97,13 +75,11 @@ export class SqliteDatabase implements DatabaseConnection {
   private statement(sql: string): CachedStatement {
     const cached = this.statements.get(sql);
     if (cached !== undefined) return cached;
-    // Explicit ParamsType makes bun return exactly the cache's statement type.
     const compiled = this.db.query<unknown, SQLQueryBindings[]>(sql);
     this.statements.set(sql, compiled);
     return compiled;
   }
 
-  /** Run `sql`, retrying briefly on SQLITE_BUSY before failing with a typed error. */
   private guard<T>(sql: string, run: (statement: CachedStatement) => T): T {
     for (let attempt = 0; ; attempt++) {
       try {

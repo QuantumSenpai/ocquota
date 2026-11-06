@@ -1,17 +1,11 @@
-/**
- * ProgressBar — the one place block glyphs and cell math live, so every
- * renderer draws identical bars for identical fractions.
- */
-
 import { clamp } from "../core/format.ts";
 
-/** Eighth-block progress glyphs; index 7 is a full cell. */
 const EIGHTHS = ["", "▏", "▎", "▍", "▌", "▋", "▊", "█"] as const;
 
 export class ProgressBar {
   constructor(private readonly width: number) {}
 
-  /** fraction 0..1 -> "[████▌░░░]". Clamped; O(width). */
+  /** O(width). */
   render(fraction: number): string {
     const scaled = clamp(fraction, 0, 1) * this.width;
     const fullCells = Math.floor(scaled);
