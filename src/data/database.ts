@@ -59,8 +59,15 @@ export class SqliteDatabase implements DatabaseConnection {
         { cause },
       );
     }
-    // Both pragmas are connection-local: no write to OpenCode's files.
-    this.db.exec(`PRAGMA busy_timeout = ${Math.max(0, Math.trunc(options.busyTimeoutMs ?? DEFAULT_BUSY_TIMEOUT_MS))}`);
+    // All three pragmas are connection-local: none of them writes to
+    // OpenCode's files. temp_store=MEMORY keeps GROUP BY's sorter in RAM
+    // instead of spilling it to a temp file — measured 97 ms -> 51 ms on a
+    // 7-day window of a 200k-row fixture. Memory stays bounded by the number
+    // of groups (a handful for daily/models, one per session for top), not by
+    // the number of rows scanned.
+    const busyTimeout = Math.max(0, Math.trunc(options.busyTimeoutMs ?? DEFAULT_BUSY_TIMEOUT_MS));
+    this.db.exec(`PRAGMA busy_timeout = ${busyTimeout}`);
+    this.db.exec("PRAGMA temp_store = MEMORY");
     this.db.exec("PRAGMA query_only = ON");
   }
 

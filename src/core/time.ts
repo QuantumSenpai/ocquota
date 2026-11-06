@@ -12,7 +12,7 @@
 
 export const MS_PER_MINUTE = 60_000;
 export const MS_PER_HOUR = 3_600_000;
-const MS_PER_DAY = 86_400_000;
+export const MS_PER_DAY = 86_400_000;
 
 export interface TimeZone {
   /** IANA name, or a fixed offset like "+05:30". Shown in messages. */
@@ -75,4 +75,59 @@ export function nextMonthStart(timeZone: TimeZone, utcMs: number): number {
 
 function floorWallDay(wallMs: number): number {
   return Math.floor(wallMs / MS_PER_DAY) * MS_PER_DAY;
+}
+
+/**
+ * One stretch of a range in which the UTC offset is constant. A zone normally
+ * has one; a range spanning a DST change has two (three if it spans both the
+ * spring and the autumn change).
+ */
+export interface OffsetSegment {
+  /** Inclusive start, UTC ms. */
+  readonly start: number;
+  /** Exclusive end, UTC ms; equals the next segment's start. */
+  readonly end: number;
+  /** Minutes east of UTC for every instant in [start, end). */
+  readonly offsetMinutes: number;
+}
+
+/**
+ * Split [from, to) into stretches of constant UTC offset. This is what lets
+ * `dailyBuckets` bucket by *real* local days — 23h on the spring-forward day,
+ * 25h on the fall-back day — instead of assuming one offset for the whole
+ * range and silently moving the last hour of a day into the next bucket.
+ *
+ * Complexity: O(hours in range) offset lookups (one Intl call each) plus one
+ * bisection of ~20 lookups per transition. A 7-day range is ~170 lookups; the
+ * pathological 366-day `daily --days 366` is ~8800, i.e. well under a
+ * millisecond, and only the `daily` command pays it.
+ */
+export function offsetSegments(timeZone: TimeZone, from: number, to: number): OffsetSegment[] {
+  if (to <= from) return [];
+  const segments: OffsetSegment[] = [];
+  let start = from;
+  let offset = timeZone.offsetMinutesAt(from);
+  for (let probe = from + MS_PER_HOUR; probe < to; probe += MS_PER_HOUR) {
+    const nextOffset = timeZone.offsetMinutesAt(probe);
+    if (nextOffset === offset) continue;
+    // The change happened inside (probe - 1h, probe]; bisect down to the ms.
+    const change = transitionInstant(timeZone, probe - MS_PER_HOUR, probe, offset);
+    segments.push({ start, end: change, offsetMinutes: offset });
+    start = change;
+    offset = nextOffset;
+  }
+  segments.push({ start, end: to, offsetMinutes: offset });
+  return segments;
+}
+
+/** Smallest instant in (low, high] whose offset is the new one. O(log hour). */
+function transitionInstant(timeZone: TimeZone, low: number, high: number, oldOffset: number): number {
+  let lo = low;
+  let hi = high;
+  while (hi - lo > 1) {
+    const mid = lo + Math.floor((hi - lo) / 2);
+    if (timeZone.offsetMinutesAt(mid) === oldOffset) lo = mid;
+    else hi = mid;
+  }
+  return hi;
 }

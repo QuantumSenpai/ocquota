@@ -13,6 +13,7 @@
  */
 
 import type { DailyBucket, ModelTotals, SessionTotals, Totals, UsageTotals, WindowRange } from "../core/types.ts";
+import type { TimeZone } from "../core/time.ts";
 
 /** One query's EXPLAIN QUERY PLAN, by stable name. */
 export interface QueryPlan {
@@ -34,12 +35,11 @@ export interface UsageRepository {
   totalsByModel(from: number): ModelTotals[];
 
   /**
-   * One row per local day between from and to, grouped in SQL.
-   * `offsetMinutes` is the caller's zone offset for bucketing local midnights;
-   * a zone that changes offset inside this span (DST) buckets by the supplied
-   * offset — exact except for messages within the DST delta of a boundary.
+   * One bucket per local calendar day between from and to, grouped in SQL.
+   * Bucketing uses the zone offset in force at each row's instant (see
+   * core/time.ts offsetSegments), so 23-hour and 25-hour DST days are exact.
    */
-  dailyBuckets(from: number, to: number, offsetMinutes: number): DailyBucket[];
+  dailyBuckets(from: number, to: number, timeZone: TimeZone): DailyBucket[];
 
   /** The `n` heaviest sessions since `from`, ordered by countable tokens. */
   topSessions(from: number, n: number): SessionTotals[];

@@ -27,7 +27,7 @@ export interface UsageTotals {
   sessions: number;
   cost: number;
   tokens: TokenUsage;
-  /** what the quota counts; see EXPR_COUNTABLE in data/message-paths.ts */
+  /** what the quota counts; see withTotalTokens in data/message-paths.ts */
   totalTokens: number;
   /** newest session_message.time_created inside the window, or null when empty */
   lastActivityAt: number | null;

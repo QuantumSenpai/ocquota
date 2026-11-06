@@ -80,8 +80,7 @@ function main(): void {
     const days = intOption(options.days, "--days", 7, 366);
     withApp((app) => {
       const range = dailyRange(app, days);
-      const offsetMinutes = app.timeZone.offsetMinutesAt(Date.now());
-      writeLine(renderDaily(app.repository.dailyBuckets(range.from, range.to, offsetMinutes), COLORS, app.timeZone));
+      writeLine(renderDaily(app.repository.dailyBuckets(range.from, range.to, app.timeZone), COLORS, app.timeZone));
     })(options);
   });
 

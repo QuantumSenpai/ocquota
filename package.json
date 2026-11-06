@@ -7,7 +7,8 @@
   "scripts": {
     "typecheck": "bun check",
     "test": "bun test",
-    "bench": "bun scripts/bench.ts"
+    "bench": "bun scripts/bench.ts",
+    "bench:scale": "bun scripts/bench-scale.ts"
   },
   "devDependencies": {
     "@types/bun": "^1.4.4",

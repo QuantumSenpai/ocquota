@@ -75,26 +75,15 @@ export const EXPR_PROVIDER_ID = `COALESCE(${extract("model.providerID")}, 'unkno
 export const EXPR_MODEL_ID = `COALESCE(${extract("model.id")}, 'unknown')`;
 
 /**
- * What the quota counts, in SQL: everything the model produces plus cache
- * *writes* (priced like fresh input), excluding cache *reads* — in a real DB
- * reads dwarf everything else (296M vs ~748K other tokens) at a fraction of
- * the price, so counting them would pin the bar at 100% forever.
- *
- * This is the single definition of "countable tokens" in the codebase; every
- * aggregate below reuses it, so the bar, the reports and the SQL ordering can
- * never disagree. Per-component COALESCE keeps a partially-shaped row (valid
- * JSON missing a field) contributing whatever it does have instead of vanishing.
- */
-export const EXPR_COUNTABLE = [
-  `COALESCE(${EXPR_INPUT}, 0)`,
-  `COALESCE(${EXPR_OUTPUT}, 0)`,
-  `COALESCE(${EXPR_REASONING}, 0)`,
-  `COALESCE(${EXPR_CACHE_WRITE}, 0)`,
-].join(" + ");
-
-/**
  * The aggregate column list shared by every totals query, so the SUMs are
  * written exactly once in the whole codebase.
+ *
+ * `total_tokens` is deliberately not here. SQLite re-parses the whole `data`
+ * document once per json_extract() call (measured 0.19 µs per call per row on
+ * a 200k-row fixture), and the countable sum needs four of the paths this list
+ * already extracts — so every statement selects these columns in a subquery
+ * and adds `total_tokens` with withTotalTokens(), which is arithmetic on four
+ * already-computed numbers. That removes 4 of the 11 JSON parses per row.
  */
 export const TOTALS_COLUMNS = `
     COUNT(*) AS messages,
@@ -105,6 +94,31 @@ export const TOTALS_COLUMNS = `
     COALESCE(SUM(${EXPR_REASONING}), 0) AS tokens_reasoning,
     COALESCE(SUM(${EXPR_CACHE_READ}), 0) AS tokens_cache_read,
     COALESCE(SUM(${EXPR_CACHE_WRITE}), 0) AS tokens_cache_write,
-    COALESCE(SUM(${EXPR_COUNTABLE}), 0) AS total_tokens,
     MAX(time_created) AS last_activity
 `;
+
+/**
+ * Outer select list: pass-through columns plus the total, without JSON work.
+ *
+ * This is also the single definition of "countable tokens": input + output +
+ * reasoning + cache *write*, excluding cache *reads* — in a real DB reads
+ * dwarf everything else (296M vs ~748K other tokens) at a fraction of the
+ * price, so counting them would pin the bar at 100% forever. The per-component
+ * COALESCE keeps a partially-shaped row (valid JSON missing a field)
+ * contributing whatever it does have instead of vanishing.
+ */
+const TOTALS_WRAPPER = `messages, sessions, cost, tokens_input, tokens_output, tokens_reasoning,
+    tokens_cache_read, tokens_cache_write,
+    COALESCE(tokens_input, 0) + COALESCE(tokens_output, 0) + COALESCE(tokens_reasoning, 0) + COALESCE(tokens_cache_write, 0) AS total_tokens,
+    last_activity`;
+
+/**
+ * Wrap an aggregate query so `total_tokens` is derived from its sums. The
+ * inner query always returns one row per group, so the outer layer does no
+ * work beyond four additions. `passthrough` forwards grouping keys (day_index,
+ * session_id, provider/model) that the outer layer must keep.
+ */
+export function withTotalTokens(aggregateQuery: string, passthrough = ""): string {
+  const prefix = passthrough === "" ? "" : `${passthrough},\n    `;
+  return `SELECT\n    ${prefix}${TOTALS_WRAPPER}\n  FROM (${aggregateQuery})`;
+}

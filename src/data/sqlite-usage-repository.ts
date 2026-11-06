@@ -24,12 +24,13 @@
  */
 
 import {
-  DAILY_BUCKETS_SQL,
   QUERIES,
   TOTALS_BY_MODEL_SQL,
   TOTALS_SINCE_SQL,
   TOP_SESSIONS_SQL,
   USAGE_IN_RANGE_SQL,
+  dailyBucketsSql,
+  dailyParams,
   type BucketRow,
   type ModelRow,
   type TopRow,
@@ -37,6 +38,7 @@ import {
 } from "./usage-queries.ts";
 import type { DatabaseConnection } from "./database.ts";
 import type { QueryPlan, UsageRepository } from "./repository.ts";
+import { MS_PER_DAY, offsetSegments, type TimeZone } from "../core/time.ts";
 import type {
   DailyBucket,
   ModelTotals,
@@ -73,16 +75,14 @@ export class SqliteUsageRepository implements UsageRepository {
     }));
   }
 
-  dailyBuckets(from: number, to: number, offsetMinutes: number): DailyBucket[] {
-    const rows = this.db.all<BucketRow>(DAILY_BUCKETS_SQL, {
-      from,
-      to,
-      dayOffset: offsetMinutes * 60_000,
-    });
-    // day_index * 86400000 is local-midnight wall time; subtract the offset to
-    // get the UTC instant of that local midnight.
+  dailyBuckets(from: number, to: number, timeZone: TimeZone): DailyBucket[] {
+    const segments = offsetSegments(timeZone, from, to);
+    if (segments.length === 0) return [];
+    const rows = this.db.all<BucketRow>(dailyBucketsSql(segments), dailyParams(from, to, segments));
+    // day_index counts local calendar days since the epoch; the UTC instant of
+    // that local midnight is its first representable instant (DST-gap safe).
     return rows.map((row) => ({
-      dayStart: row.day_index * 86_400_000 - offsetMinutes * 60_000,
+      dayStart: timeZone.earliestInstantAt(row.day_index * MS_PER_DAY),
       messages: row.messages,
       cost: row.cost,
       tokens: toTokenUsage(row),
