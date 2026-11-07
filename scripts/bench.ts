@@ -4,11 +4,14 @@ import { join } from "node:path";
 import { formatLocalDate } from "../src/core/format.ts";
 import { MS_PER_DAY, nextDayStart, startOfDayOffset } from "../src/core/time.ts";
 import { createTimeZone, systemTimeZoneId } from "../src/core/timezone.ts";
-import type { UsageTotals } from "../src/core/types.ts";
+import type { UsageTotals, WindowRange } from "../src/core/types.ts";
 import { SqliteDatabase } from "../src/data/database.ts";
 import { SqliteUsageRepository } from "../src/data/sqlite-usage-repository.ts";
+import { IncrementalUsageTracker } from "../src/domain/incremental-tracker.ts";
+import type { WindowStrategy } from "../src/domain/window.ts";
 
 const RUNS = 100;
+const WATCH_REFRESHES = 50;
 /** ~5 ms per 1,000 assistant messages baseline + 50% headroom. */
 const LIMIT_MS_PER_1K = 7.5;
 
@@ -25,11 +28,14 @@ const busiestRange = { start: busiest.dayStart, end: nextDayStart(timeZone, busi
 const now = Date.now();
 const last30Range = { start: now - 30 * MS_PER_DAY, end: now };
 
+const busiestLabel = `busiest local day (${formatLocalDate(busiestRange.start, timeZone)})`;
 const scenarios: ReadonlyArray<{ label: string; run: () => UsageTotals }> = [
   { label: "all-time totalsSince(0)", run: () => repository.totalsSince(0) },
-  { label: `busiest local day (${formatLocalDate(busiestRange.start, timeZone)})`, run: () => repository.usageInRange(busiestRange) },
+  { label: busiestLabel, run: () => repository.usageInRange(busiestRange) },
   { label: "last 30 days", run: () => repository.usageInRange(last30Range) },
 ];
+
+const fullAvgByLabel = new Map<string, number>();
 
 let failed = false;
 const lines: string[] = [
@@ -48,6 +54,7 @@ for (const scenario of scenarios) {
   }
   samples.sort((a, b) => a - b);
   const average = samples.reduce((sum, ms) => sum + ms, 0) / samples.length;
+  fullAvgByLabel.set(scenario.label, average);
   const min = samples[0] ?? 0;
   const max = samples[samples.length - 1] ?? 0;
   const p95 = samples[Math.min(samples.length - 1, Math.ceil(RUNS * 0.95) - 1)] ?? 0;
@@ -64,6 +71,43 @@ for (const scenario of scenarios) {
       : passed
         ? `  PASS        ${msPer1k.toFixed(3)} ms/1k < ${LIMIT_MS_PER_1K} ms/1k (${messages} messages)`
         : `  FAIL        ${msPer1k.toFixed(3)} ms/1k >= ${LIMIT_MS_PER_1K} ms/1k (${messages} messages)`,
+    "",
+  );
+}
+
+const watchWindows: ReadonlyArray<{ label: string; range: WindowRange }> = [
+  { label: busiestLabel, range: busiestRange },
+  { label: "last 30 days", range: last30Range },
+];
+
+lines.push(`watch refreshes (${WATCH_REFRESHES} incremental refreshes after 1 base-settle warm-up)`, "");
+
+for (const w of watchWindows) {
+  const full = repository.usageInRange(w.range);
+  const tickNow = (full.lastActivityAt ?? w.range.end - 1) + 1;
+  const strategy: WindowStrategy = { kind: "day", label: w.label, range: () => w.range };
+  const tracker = new IncrementalUsageTracker(repository, strategy, () => tickNow);
+  const warm = tracker.totals(tickNow);
+  const samples: number[] = [];
+  for (let i = 0; i < WATCH_REFRESHES; i++) {
+    const started = performance.now();
+    tracker.totals(tickNow);
+    samples.push(performance.now() - started);
+  }
+  samples.sort((a, b) => a - b);
+  const avgRefreshMs = samples.reduce((sum, ms) => sum + ms, 0) / samples.length;
+  const p95RefreshMs = samples[Math.min(samples.length - 1, Math.ceil(WATCH_REFRESHES * 0.95) - 1)] ?? 0;
+  const fullMs = fullAvgByLabel.get(w.label) ?? 0;
+  const exact = warm.totalTokens === full.totalTokens && warm.messages === full.messages && warm.sessions === full.sessions;
+  const passed = full.messages > 0 && exact && avgRefreshMs < fullMs;
+  failed ||= !passed;
+  lines.push(
+    `watch 50x · ${w.label} (${full.messages} assistant messages)`,
+    `  full query  ${fullMs.toFixed(3)} ms avg (${full.messages} messages)`,
+    `  refresh avg ${avgRefreshMs.toFixed(3)} ms (p95 ${p95RefreshMs.toFixed(3)} ms, ${(fullMs / Math.max(avgRefreshMs, 1e-6)).toFixed(1)}x faster)`,
+    passed
+      ? `  PASS        incremental ${avgRefreshMs.toFixed(3)} ms < full ${fullMs.toFixed(3)} ms (${full.messages} messages)`
+      : `  FAIL        incremental ${avgRefreshMs.toFixed(3)} ms vs full ${fullMs.toFixed(3)} ms (exact=${exact})`,
     "",
   );
 }

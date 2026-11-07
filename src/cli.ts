@@ -46,7 +46,7 @@ function main(): void {
   cli.command("bar", "Show the quota bar (alias of the default command)").action(withApp((app) => writeLine(fullRenderer(app).render(app.service.snapshot()))));
 
   cli.command("watch", "Refresh the quota bar until Ctrl-C").action((options: RawOptions) => {
-    const app = buildApp(options);
+    const app = buildApp(options, true);
     const loop = new WatchLoop({
       render: () => fullRenderer(app).render(app.service.snapshot()),
       refreshMs: app.config.refreshMs,

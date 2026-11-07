@@ -4,6 +4,7 @@ import { createTimeZone } from "./core/timezone.ts";
 import type { TimeZone } from "./core/time.ts";
 import { SqliteDatabase } from "./data/database.ts";
 import { SqliteUsageRepository } from "./data/sqlite-usage-repository.ts";
+import { IncrementalUsageTracker } from "./domain/incremental-tracker.ts";
 import { QuotaService } from "./domain/quota-service.ts";
 import { createWindow } from "./domain/window.ts";
 import { FullRenderer } from "./render/full-renderer.ts";
@@ -17,6 +18,7 @@ export interface App {
   config: QuotaConfig;
   db: SqliteDatabase;
   repository: SqliteUsageRepository;
+  tracker: IncrementalUsageTracker;
   service: QuotaService;
   timeZone: TimeZone;
 }
@@ -33,7 +35,7 @@ export interface RawOptions {
   n?: string | undefined;
 }
 
-export function buildApp(options: RawOptions): App {
+export function buildApp(options: RawOptions, incremental = false): App {
   const cliOverrides: CliOverrides = {
     dbPath: options.db,
     window: options.window,
@@ -46,14 +48,18 @@ export function buildApp(options: RawOptions): App {
   const config = new ConfigStore().load(cliOverrides);
   const db = new SqliteDatabase(config.dbPath);
   const timeZone = createTimeZone(config.timezone);
+  const window = createWindow(config.window, timeZone);
   const repository = new SqliteUsageRepository(db);
+  const tracker = new IncrementalUsageTracker(repository, window);
   const service = new QuotaService(
     repository,
-    createWindow(config.window, timeZone),
+    window,
     { tokens: config.limitTokens, cost: config.limitCost },
     config.metric,
+    Date.now,
+    incremental ? tracker : undefined,
   );
-  return { config, db, repository, service, timeZone };
+  return { config, db, repository, tracker, service, timeZone };
 }
 
 export function withApp(run: (app: App) => void): (options: RawOptions) => void {

@@ -113,9 +113,7 @@ describe("TimeZone.earliestInstantAt (DST gap/overlap semantics)", () => {
   });
 
   test("spring-forward gap moves forward to the first real instant", () => {
-    // 02:30 local does not exist on 2026-03-08; clocks jump 02:00 -> 03:00.
-    const wall = utc("2026-03-08T02:30:00Z");
-    expect(new Date(NY.earliestInstantAt(wall)).toISOString()).toBe("2026-03-08T07:00:00.000Z");
+    expect(new Date(NY.earliestInstantAt(utc("2026-03-08T02:30:00Z"))).toISOString()).toBe("2026-03-08T07:00:00.000Z");
   });
 });
 
@@ -125,11 +123,9 @@ describe("boundary helpers", () => {
     expect(startOfDay(NY, now)).toBe(utc("2026-03-08T05:00:00Z"));
     expect(nextDayStart(NY, now)).toBe(utc("2026-03-09T04:00:00Z"));
   });
-
   test("startOfMonth lands on the 1st at local midnight", () => {
     expect(new Date(startOfMonth(NY, utc("2026-03-15T15:00:00Z"))).toISOString()).toBe("2026-03-01T05:00:00.000Z");
   });
-
   test("now always falls inside its own window", () => {
     for (const zone of [NY, KOL, UTC]) {
       for (const kind of ["day", "week", "month"] as const) {

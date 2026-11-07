@@ -16,6 +16,10 @@ export interface UsageRepository {
 
   totalsByModel(from: number): ModelTotals[];
 
+  totalsByModelInRange(range: WindowRange): ModelTotals[];
+
+  sessionIdsInRange(range: WindowRange): string[];
+
   dailyBuckets(from: number, to: number, timeZone: TimeZone): DailyBucket[];
 
   topSessions(from: number, n: number): SessionTotals[];

@@ -78,13 +78,14 @@ export class Fixture {
     this.seed.prepare("INSERT INTO session_v2 VALUES (?, ?)").run(id, title);
   }
 
-  message(row: MessageFixture): void {
+  message(row: MessageFixture): string {
     const sessionId = row.sessionId ?? "ses_1";
     this.seq += 1;
+    const id = `msg_${this.seq}`;
     this.seed
       .prepare("INSERT INTO session_message VALUES (?, ?, ?, ?, ?, ?, ?)")
       .run(
-        `msg_${this.seq}`,
+        id,
         sessionId,
         row.type ?? "assistant",
         this.seq,
@@ -92,6 +93,11 @@ export class Fixture {
         row.timeUpdated ?? row.timeCreated + 1_000,
         row.data,
       );
+    return id;
+  }
+
+  updateMessage(id: string, data: string, timeUpdated: number): void {
+    this.seed.prepare("UPDATE session_message SET data = ?, time_updated = ? WHERE id = ?").run(data, timeUpdated, id);
   }
 
   lockConnection(): Database {

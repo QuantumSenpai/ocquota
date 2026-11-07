@@ -37,18 +37,30 @@ function totalsQuery(where: string): string {
 export const USAGE_IN_RANGE_SQL = totalsQuery("time_created >= $from AND time_created < $to");
 export const TOTALS_SINCE_SQL = totalsQuery("time_created >= $from");
 
-const MODEL_INNER = `
+function modelQuery(where: string): string {
+  const inner = `
   SELECT
     ${EXPR_PROVIDER_ID} AS provider_id,
     ${EXPR_MODEL_ID} AS model_id,
     ${TOTALS_COLUMNS}
   FROM session_message
-  WHERE time_created >= $from
+  WHERE ${where}
     AND ${USAGE_ROW_FILTER}
   GROUP BY provider_id, model_id
 `;
-export const TOTALS_BY_MODEL_SQL = `${withTotalTokens(MODEL_INNER, "provider_id, model_id")}
+  return `${withTotalTokens(inner, "provider_id, model_id")}
   ORDER BY total_tokens DESC
+`;
+}
+
+export const TOTALS_BY_MODEL_SQL = modelQuery("time_created >= $from");
+export const TOTALS_BY_MODEL_IN_RANGE_SQL = modelQuery("time_created >= $from AND time_created < $to");
+
+export const SESSION_IDS_IN_RANGE_SQL = `
+  SELECT DISTINCT session_id
+  FROM session_message
+  WHERE time_created >= $from AND time_created < $to
+    AND ${USAGE_ROW_FILTER}
 `;
 
 /** Per-segment offsets keep 23h/25h DST local days in their own `day_index` bucket. */
@@ -114,6 +126,8 @@ export const QUERIES: ReadonlyArray<{ name: string; sql: string; params: SqlPara
   { name: "usageInRange", sql: USAGE_IN_RANGE_SQL, params: { from: 0, to: 1 } },
   { name: "totalsSince", sql: TOTALS_SINCE_SQL, params: { from: 0 } },
   { name: "totalsByModel", sql: TOTALS_BY_MODEL_SQL, params: { from: 0 } },
+  { name: "totalsByModelInRange", sql: TOTALS_BY_MODEL_IN_RANGE_SQL, params: { from: 0, to: 1 } },
+  { name: "sessionIdsInRange", sql: SESSION_IDS_IN_RANGE_SQL, params: { from: 0, to: 1 } },
   { name: "dailyBuckets", sql: dailyBucketsSql(EXPLAIN_SEGMENT), params: { from: 0, to: 1, o1: 0 } },
   { name: "topSessions", sql: TOP_SESSIONS_SQL, params: { from: 0, n: 5 } },
 ];

@@ -74,4 +74,6 @@ export interface QuotaSnapshot {
   sessions: number;
   lastActivityAt: number | null;
   takenAt: number;
+  burnRatePerHour: number;
+  projection: string;
 }

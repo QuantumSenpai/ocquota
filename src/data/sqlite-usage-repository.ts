@@ -6,6 +6,8 @@
 
 import {
   QUERIES,
+  SESSION_IDS_IN_RANGE_SQL,
+  TOTALS_BY_MODEL_IN_RANGE_SQL,
   TOTALS_BY_MODEL_SQL,
   TOTALS_SINCE_SQL,
   TOP_SESSIONS_SQL,
@@ -44,15 +46,16 @@ export class SqliteUsageRepository implements UsageRepository {
   }
 
   totalsByModel(from: number): ModelTotals[] {
-    const rows = this.db.all<ModelRow>(TOTALS_BY_MODEL_SQL, { from });
-    return rows.map((row) => ({
-      providerId: row.provider_id,
-      modelId: row.model_id,
-      messages: row.messages,
-      cost: row.cost,
-      tokens: toTokenUsage(row),
-      totalTokens: row.total_tokens,
-    }));
+    return this.db.all<ModelRow>(TOTALS_BY_MODEL_SQL, { from }).map(toModelTotals);
+  }
+
+  totalsByModelInRange(range: WindowRange): ModelTotals[] {
+    return this.db.all<ModelRow>(TOTALS_BY_MODEL_IN_RANGE_SQL, { from: range.start, to: range.end }).map(toModelTotals);
+  }
+
+  sessionIdsInRange(range: WindowRange): string[] {
+    const rows = this.db.all<{ session_id: string }>(SESSION_IDS_IN_RANGE_SQL, { from: range.start, to: range.end });
+    return rows.map((row) => row.session_id);
   }
 
   dailyBuckets(from: number, to: number, timeZone: TimeZone): DailyBucket[] {
@@ -107,6 +110,17 @@ function toTokenUsage(row: TotalsRow): TokenUsage {
     reasoning: row.tokens_reasoning,
     cacheRead: row.tokens_cache_read,
     cacheWrite: row.tokens_cache_write,
+  };
+}
+
+function toModelTotals(row: ModelRow): ModelTotals {
+  return {
+    providerId: row.provider_id,
+    modelId: row.model_id,
+    messages: row.messages,
+    cost: row.cost,
+    tokens: toTokenUsage(row),
+    totalTokens: row.total_tokens,
   };
 }
 

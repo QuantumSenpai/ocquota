@@ -6,6 +6,7 @@ interface WatchLoopOptions {
   refreshMs: number;
   colors: RendererColors;
   onClose: () => void;
+  debug?: boolean | undefined;
 }
 
 export class WatchLoop {
@@ -21,7 +22,7 @@ export class WatchLoop {
     // Piped output: one shot, no ANSI spam.
     if (!process.stdout.isTTY) {
       try {
-        process.stdout.write(`${this.options.render()}\n`);
+        process.stdout.write(`${this.renderFrame()}\n`);
       } finally {
         this.options.onClose();
       }
@@ -46,10 +47,19 @@ export class WatchLoop {
     if (!this.running) return;
     process.stdout.write("\x1B[2J\x1B[H");
     try {
-      process.stdout.write(`${this.options.render()}\n`);
+      process.stdout.write(`${this.renderFrame()}\n`);
     } catch (error) {
       process.stdout.write(`${this.options.colors.red(friendlyMessage(error))}\n`);
     }
     this.timer = setTimeout(() => this.tick(), this.options.refreshMs);
+  }
+
+  private renderFrame(): string {
+    const started = performance.now();
+    const output = this.options.render();
+    const debug = this.options.debug ?? process.env["OCQUOTA_DEBUG"] === "1";
+    if (!debug) return output;
+    const elapsedMs = performance.now() - started;
+    return `${output}\n${this.options.colors.dim(`refresh ${elapsedMs.toFixed(2)} ms`)}`;
   }
 }
