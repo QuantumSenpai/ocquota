@@ -97,8 +97,13 @@ function main(): void {
 try {
   main();
 } catch (error) {
+  if (process.env["OCQUOTA_DEBUG"] === "1") throw error;
   if (error instanceof OcquotaError) {
     process.stderr.write(`ocquota: ${error.message}\n`);
+    process.exit(1);
+  }
+  if (error instanceof Error && error.name === "CACError") {
+    process.stderr.write(`ocquota: ${error.message}. Run ocquota --help\n`);
     process.exit(1);
   }
   throw error;

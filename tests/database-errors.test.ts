@@ -101,4 +101,17 @@ describe("config & watch cleanup edge cases", () => {
       process.stdout.isTTY = prevIsTTY;
     }
   });
+
+  test("CLI catches CACError with a friendly one-line message and Run ocquota --help", () => {
+    for (const args of [["unknown-cmd"], ["--unknown-flag"], ["--limit"]]) {
+      const proc = Bun.spawnSync(["bun", "src/cli.ts", ...args], {
+        env: { ...process.env, OCQUOTA_DEBUG: "" },
+        stderr: "pipe",
+      });
+      const stderr = new TextDecoder().decode(proc.stderr).trim();
+      expect(proc.exitCode).toBe(1);
+      expect(stderr.split("\n")).toHaveLength(1);
+      expect(stderr).toMatch(/^ocquota: .+ Run ocquota --help$/);
+    }
+  });
 });

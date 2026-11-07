@@ -1,11 +1,14 @@
 {
   "name": "ocquota",
   "version": "0.1.0",
+  "bin": {
+    "ocquota": "src/cli.ts"
+  },
   "module": "src/cli.ts",
   "type": "module",
   "private": true,
   "scripts": {
-    "typecheck": "bun check",
+    "typecheck": "bunx tsc --noEmit",
     "test": "bun test",
     "bench": "bun scripts/bench.ts",
     "bench:scale": "bun scripts/bench-scale.ts"
