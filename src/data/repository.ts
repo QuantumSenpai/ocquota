@@ -1,6 +1,6 @@
-/** Each method executes 1 cached prepared statement using session_message_time_created_idx. */
+/** Read-only usage queries, independent of source storage format. */
 
-import type { DailyBucket, ModelTotals, SessionTotals, Totals, UsageTotals, WindowRange } from "../core/types.ts";
+import type { DailyBucket, ModelTotals, SessionTotals, Totals, UsageSource, UsageTotals, WindowRange } from "../core/types.ts";
 import type { TimeZone } from "../core/time.ts";
 
 export interface QueryPlan {
@@ -9,7 +9,9 @@ export interface QueryPlan {
 }
 
 export interface UsageRepository {
-  /** O(rows in range) in SQL, one row returned. */
+  readonly source?: UsageSource;
+
+  /** Count usage events in a half-open time range. */
   usageInRange(range: WindowRange): UsageTotals;
 
   totalsSince(from: number): Totals;

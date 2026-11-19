@@ -1,7 +1,7 @@
 import type { QuotaSnapshot } from "../core/types.ts";
 
 export interface Renderer {
-  render(snapshot: QuotaSnapshot): string;
+  render(snapshot: QuotaSnapshot, frame?: number): string;
 }
 
 export interface RendererColors {

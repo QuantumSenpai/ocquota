@@ -4,20 +4,24 @@ import { createTimeZone } from "./core/timezone.ts";
 import type { TimeZone } from "./core/time.ts";
 import { SqliteDatabase } from "./data/database.ts";
 import { SqliteUsageRepository } from "./data/sqlite-usage-repository.ts";
+import { CodexUsageRepository } from "./data/codex-usage-repository.ts";
+import type { UsageRepository } from "./data/repository.ts";
+import { ConfigError } from "./core/errors.ts";
 import { IncrementalUsageTracker } from "./domain/incremental-tracker.ts";
 import { QuotaService } from "./domain/quota-service.ts";
 import { createWindow } from "./domain/window.ts";
 import { FullRenderer } from "./render/full-renderer.ts";
 import { OneLineRenderer } from "./render/one-line-renderer.ts";
 import { ProgressBar } from "./render/progress-bar.ts";
+import { ThemeRenderer } from "./render/theme-renderer.ts";
 import type { Renderer, RendererColors } from "./render/renderer.ts";
 
-export const COLORS: RendererColors = pc;
+export const COLORS = pc satisfies RendererColors;
 
 export interface App {
   config: QuotaConfig;
-  db: SqliteDatabase;
-  repository: SqliteUsageRepository;
+  close: () => void;
+  repository: UsageRepository;
   tracker: IncrementalUsageTracker;
   service: QuotaService;
   timeZone: TimeZone;
@@ -25,6 +29,8 @@ export interface App {
 
 export interface RawOptions {
   db?: string | undefined;
+  source?: string | undefined;
+  codexHome?: string | undefined;
   window?: string | undefined;
   limit?: string | undefined;
   limitCost?: string | undefined;
@@ -33,23 +39,31 @@ export interface RawOptions {
   tz?: string | undefined;
   days?: string | undefined;
   n?: string | undefined;
+  theme?: string | undefined;
+  motion?: boolean | undefined;
 }
 
 export function buildApp(options: RawOptions, incremental = false): App {
   const cliOverrides: CliOverrides = {
     dbPath: options.db,
+    source: options.source,
+    codexHome: options.codexHome,
     window: options.window,
     limitTokens: options.limit,
     limitCost: options.limitCost,
     metric: options.metric,
     refreshMs: options.refresh,
     timezone: options.tz,
+    theme: options.theme,
   };
   const config = new ConfigStore().load(cliOverrides);
-  const db = new SqliteDatabase(config.dbPath);
+  if (config.source === "codex" && config.metric === "cost") {
+    throw new ConfigError("Codex session logs do not report billed dollar cost. Use --metric tokens with --source codex.");
+  }
   const timeZone = createTimeZone(config.timezone);
   const window = createWindow(config.window, timeZone);
-  const repository = new SqliteUsageRepository(db);
+  const db = config.source === "opencode" ? new SqliteDatabase(config.dbPath) : undefined;
+  const repository: UsageRepository = db ? new SqliteUsageRepository(db) : new CodexUsageRepository(config.codexHome);
   const tracker = new IncrementalUsageTracker(repository, window);
   const service = new QuotaService(
     repository,
@@ -57,9 +71,9 @@ export function buildApp(options: RawOptions, incremental = false): App {
     { tokens: config.limitTokens, cost: config.limitCost },
     config.metric,
     Date.now,
-    incremental ? tracker : undefined,
+    incremental && config.source === "opencode" ? tracker : undefined,
   );
-  return { config, db, repository, tracker, service, timeZone };
+  return { config, close: () => db?.close(), repository, tracker, service, timeZone };
 }
 
 export function withApp(run: (app: App) => void): (options: RawOptions) => void {
@@ -68,12 +82,18 @@ export function withApp(run: (app: App) => void): (options: RawOptions) => void 
     try {
       run(app);
     } finally {
-      app.db.close();
+      app.close();
     }
   };
 }
 
-export function fullRenderer(app: App): Renderer {
+export function fullRenderer(app: App, watch = false): Renderer {
+  if (app.config.theme !== "raw") {
+    return new ThemeRenderer({
+      theme: app.config.theme, timeZone: app.timeZone, color: COLORS.isColorSupported, watch,
+      limitConfigured: app.config.metric !== "cost" || app.config.limitCost !== null,
+    });
+  }
   return new FullRenderer({
     bar: new ProgressBar(app.config.barWidth),
     colors: COLORS,

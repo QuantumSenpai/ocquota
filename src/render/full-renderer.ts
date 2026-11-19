@@ -30,9 +30,9 @@ export class FullRenderer implements Renderer {
     const usedLabel = snapshot.metric === "cost" ? formatMoney(snapshot.used) : formatCount(snapshot.used);
 
     return [
-      `${c.bold("ocquota")} ${c.dim(`· window ${snapshot.windowKind} · ${from} → ${to}`)}`,
+      `${c.bold("ocquota")} ${c.dim(`${snapshot.source === "codex" ? "· Codex " : ""}· window ${snapshot.windowKind} · ${from} → ${to}`)}`,
       `${accent(this.bar.render(snapshot.percent))} ${accent(formatPercent(snapshot.percent))}  ${usedLabel} / ${limitLabel}`,
-      `${c.dim("sessions")} ${snapshot.sessions} ${c.dim("· tokens")} ${formatCount(snapshot.totalTokens)} ${c.dim("· cost")} ${formatMoney(snapshot.cost)}`,
+      `${c.dim("sessions")} ${snapshot.sessions} ${c.dim("· tokens")} ${formatCount(snapshot.totalTokens)} ${c.dim("· cost")} ${snapshot.costAvailable === false ? "N/A" : formatMoney(snapshot.cost)}`,
       `${c.dim("last activity")} ${formatAgo(snapshot.lastActivityAt, snapshot.takenAt)} ${c.dim("· resets in")} ${formatDuration(snapshot.resetAt - snapshot.takenAt)} ${c.dim(`(${to})`)} ${c.dim("·")} ${snapshot.projection}`,
     ].join("\n");
   }

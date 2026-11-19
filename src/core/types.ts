@@ -1,6 +1,11 @@
 export type WindowKind = "day" | "week" | "month";
 
 export type QuotaMetric = "tokens" | "cost";
+export const USAGE_SOURCES = ["opencode", "codex"] as const;
+export type UsageSource = (typeof USAGE_SOURCES)[number];
+
+export const THEME_NAMES = ["aurora", "ember", "mono", "raw"] as const;
+export type ThemeName = (typeof THEME_NAMES)[number];
 
 export const WINDOW_KINDS: readonly WindowKind[] = ["day", "week", "month"];
 export const QUOTA_METRICS: readonly QuotaMetric[] = ["tokens", "cost"];
@@ -60,6 +65,8 @@ export interface WindowRange {
 }
 
 export interface QuotaSnapshot {
+  source?: UsageSource;
+  costAvailable?: boolean;
   windowKind: WindowKind;
   range: WindowRange;
   resetAt: number;

@@ -22,11 +22,11 @@ export class OneLineRenderer implements Renderer {
     const used = snapshot.metric === "cost" ? formatMoney(snapshot.used) : formatCompact(snapshot.used);
     const limit = snapshot.metric === "cost" ? formatMoney(snapshot.limit) : formatCompact(snapshot.limit);
     return [
-      this.colors.bold("ocquota"),
+      this.colors.bold(snapshot.source === "codex" ? "ocquota · Codex" : "ocquota"),
       accent(formatPercent(snapshot.percent)),
       accent(this.bar.render(snapshot.percent)),
       `${used}/${limit}`,
-      formatMoney(snapshot.cost),
+      snapshot.costAvailable === false ? "cost N/A" : formatMoney(snapshot.cost),
       `${this.colors.dim("resets")} ${formatDuration(snapshot.resetAt - snapshot.takenAt)}`,
     ].join(" ");
   }

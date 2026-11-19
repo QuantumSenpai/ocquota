@@ -1,25 +1,48 @@
 {
-  "name": "ocquota",
-  "version": "0.1.0",
-  "bin": {
-    "ocquota": "src/cli.ts"
+  "name": "@kyzenn.raw/ocquota",
+  "version": "0.2.0",
+  "description": "Themed, read-only usage and quota reports for OpenCode and Codex.",
+  "license": "MIT",
+  "author": "Krishnendu",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/QuantumSenpai/ocquota.git"
   },
-  "module": "src/cli.ts",
+  "bugs": "https://github.com/QuantumSenpai/ocquota/issues",
+  "homepage": "https://github.com/QuantumSenpai/ocquota#readme",
+  "keywords": ["codex", "opencode", "cli", "tokens", "usage", "quota", "themes"],
+  "bin": {
+    "ocquota": "dist/cli.js"
+  },
+  "files": ["dist/cli.js", "dist/tui.tsx", "dist/tui-runtime.js", "dist/licenses.txt", "CHANGELOG.md"],
+  "exports": { "./tui": "./dist/tui.tsx" },
   "type": "module",
-  "private": true,
+  "engines": {
+    "bun": ">=1.4.4"
+  },
+  "publishConfig": {
+    "access": "public",
+    "registry": "https://registry.npmjs.org/"
+  },
   "scripts": {
+    "build": "bun scripts/build.ts",
+    "prepack": "bun run build",
+    "prepublishOnly": "bun run typecheck && bun test",
     "typecheck": "bunx tsc --noEmit",
     "test": "bun test",
     "bench": "bun scripts/bench.ts",
     "bench:scale": "bun scripts/bench-scale.ts"
   },
   "devDependencies": {
+    "@opencode/plugin": "2.3.2",
+    "@opencode/theme": "2.3.2",
+    "@opentui/core": "0.8.4",
+    "@opentui/solid": "0.8.4",
     "@types/bun": "^1.4.4",
-    "typescript": "^7.0.2"
-  },
-  "dependencies": {
     "cac": "^7.1.0",
     "picocolors": "^1.1.1",
+    "solid-js": "^1.9.0",
+    "typescript": "^7.0.2",
     "zod": "^4.6.7"
   }
 }

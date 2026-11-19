@@ -1,6 +1,6 @@
 import { formatCompact, formatCount, formatLocalDate, formatLocalDateTime, formatMoney } from "../core/format.ts";
 import type { TimeZone } from "../core/time.ts";
-import type { DailyBucket, ModelTotals, SessionTotals, TokenUsage, Totals } from "../core/types.ts";
+import type { DailyBucket, ModelTotals, SessionTotals, TokenUsage, Totals, UsageSource } from "../core/types.ts";
 import type { RendererColors } from "./renderer.ts";
 
 function tokenDetail(tokens: TokenUsage, colors: RendererColors): string {
@@ -24,22 +24,26 @@ function num(value: number, width: number): string {
 
 const EMPTY = "no usage yet.";
 
-export function renderTotals(totals: Totals, colors: RendererColors, timeZone: TimeZone): string {
-  const header = `${colors.bold("totals")} ${colors.dim(`· since ${formatLocalDateTime(totals.from, timeZone)} · exact per-message`)}`;
+function cost(value: number, source: UsageSource): string {
+  return source === "codex" ? "N/A" : formatMoney(value);
+}
+
+export function renderTotals(totals: Totals, colors: RendererColors, timeZone: TimeZone, source: UsageSource = "opencode"): string {
+  const header = `${colors.bold("totals")} ${colors.dim(`· since ${formatLocalDateTime(totals.from, timeZone)} · exact per-${source === "codex" ? "response · Codex" : "message"}`)}`;
   if (totals.messages === 0) return `${header}\n${colors.dim(EMPTY)}`;
   return [
     header,
     `${colors.dim("counted")} ${formatCount(totals.totalTokens)} tokens ${colors.dim("(input + output + reasoning + cache write)")}`,
     tokenDetail(totals.tokens, colors),
-    `${colors.dim("messages")} ${formatCount(totals.messages)} ${colors.dim("· sessions")} ${totals.sessions} ${colors.dim("· cost")} ${formatMoney(totals.cost)}`,
+    `${colors.dim(source === "codex" ? "responses" : "messages")} ${formatCount(totals.messages)} ${colors.dim("· sessions")} ${totals.sessions} ${colors.dim("· cost")} ${cost(totals.cost, source)}`,
     `${colors.dim("last activity")} ${totals.lastActivityAt === null ? "never" : formatLocalDateTime(totals.lastActivityAt, timeZone)}`,
   ].join("\n");
 }
 
-export function renderModels(models: ModelTotals[], colors: RendererColors): string {
+export function renderModels(models: ModelTotals[], colors: RendererColors, source: UsageSource = "opencode"): string {
   if (models.length === 0) return colors.dim(EMPTY);
   const grandTotal = models.reduce((sum, model) => sum + model.totalTokens, 0);
-  const head = `${cell("model", 42)}${"msgs".padStart(6)}${"tokens".padStart(11)}${"share".padStart(8)}${"cost".padStart(10)}`;
+  const head = `${cell("model", 42)}${(source === "codex" ? "calls" : "msgs").padStart(6)}${"tokens".padStart(11)}${"share".padStart(8)}${"cost".padStart(10)}`;
   const rows = models.map((model) => {
     const share = grandTotal > 0 ? model.totalTokens / grandTotal : 0;
     return (
@@ -47,19 +51,19 @@ export function renderModels(models: ModelTotals[], colors: RendererColors): str
       num(model.messages, 6) +
       num(model.totalTokens, 11) +
       `${(share * 100).toFixed(1)}%`.padStart(8) +
-      formatMoney(model.cost).padStart(10)
+      cost(model.cost, source).padStart(10)
     );
   });
   return [
     colors.dim(head),
     ...rows,
-    `${cell("total", 42)}${num(models.reduce((sum, m) => sum + m.messages, 0), 6)}${num(grandTotal, 11)}${"100.0%".padStart(8)}${formatMoney(models.reduce((sum, m) => sum + m.cost, 0)).padStart(10)}`,
+    `${cell("total", 42)}${num(models.reduce((sum, m) => sum + m.messages, 0), 6)}${num(grandTotal, 11)}${"100.0%".padStart(8)}${cost(models.reduce((sum, m) => sum + m.cost, 0), source).padStart(10)}`,
   ].join("\n");
 }
 
-export function renderDaily(buckets: DailyBucket[], colors: RendererColors, timeZone: TimeZone): string {
+export function renderDaily(buckets: DailyBucket[], colors: RendererColors, timeZone: TimeZone, source: UsageSource = "opencode"): string {
   if (buckets.length === 0) return colors.dim(EMPTY);
-  const head = `${cell("day", 11)}${"msgs".padStart(6)}${"tokens".padStart(11)}${"cost".padStart(10)}  detail`;
+  const head = `${cell("day", 11)}${(source === "codex" ? "calls" : "msgs").padStart(6)}${"tokens".padStart(11)}${"cost".padStart(10)}  detail`;
   const rows = buckets.map((bucket) => {
     const detail =
       `${formatCompact(bucket.tokens.input)} in · ${formatCompact(bucket.tokens.output)} out · ` +
@@ -68,16 +72,16 @@ export function renderDaily(buckets: DailyBucket[], colors: RendererColors, time
       cell(formatLocalDate(bucket.dayStart, timeZone), 11) +
       num(bucket.messages, 6) +
       num(bucket.totalTokens, 11) +
-      formatMoney(bucket.cost).padStart(10) +
+      cost(bucket.cost, source).padStart(10) +
       `  ${detail}`
     );
   });
   return [colors.dim(head), ...rows].join("\n");
 }
 
-export function renderSessions(sessions: SessionTotals[], colors: RendererColors, timeZone: TimeZone): string {
+export function renderSessions(sessions: SessionTotals[], colors: RendererColors, timeZone: TimeZone, source: UsageSource = "opencode"): string {
   if (sessions.length === 0) return colors.dim(EMPTY);
-  const head = `${cell("#", 3)}${cell("session", 42)}${"msgs".padStart(6)}${"tokens".padStart(11)}${"cost".padStart(10)}  last active`;
+  const head = `${cell("#", 3)}${cell("session", 42)}${(source === "codex" ? "calls" : "msgs").padStart(6)}${"tokens".padStart(11)}${"cost".padStart(10)}  last active`;
   const rows = sessions.map((session, index) => {
     const title = session.title === null || session.title.trim() === "" ? session.sessionId : session.title.trim();
     return (
@@ -85,7 +89,7 @@ export function renderSessions(sessions: SessionTotals[], colors: RendererColors
       cell(title, 42) +
       num(session.messages, 6) +
       num(session.totalTokens, 11) +
-      formatMoney(session.cost).padStart(10) +
+      cost(session.cost, source).padStart(10) +
       `  ${formatLocalDateTime(session.lastActivityAt, timeZone)}`
     );
   });

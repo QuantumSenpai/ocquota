@@ -44,6 +44,8 @@ export class QuotaService {
     const { burnRatePerHour, projection } = this.projector.project(limit, range.end, takenAt);
 
     return {
+      source: this.repository.source ?? "opencode",
+      costAvailable: this.repository.source !== "codex",
       windowKind: this.window.kind,
       range,
       resetAt: range.end,

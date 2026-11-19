@@ -17,6 +17,7 @@ export interface DatabaseConnection {
 
 interface OpenOptions {
   busyTimeoutMs?: number | undefined;
+  retryBusy?: boolean;
 }
 
 type CachedStatement = Statement<unknown, SQLQueryBindings[]>;
@@ -28,9 +29,11 @@ export class SqliteDatabase implements DatabaseConnection {
   private readonly statements = new Map<string, CachedStatement>();
   readonly path: string;
   private closed = false;
+  private readonly retryBusy: boolean;
 
   constructor(path: string, options: OpenOptions = {}) {
     this.path = path;
+    this.retryBusy = options.retryBusy !== false;
     try {
       // readonly + create:false prevents any write or lock against OpenCode.
       this.db = new Database(path, { readonly: true, create: false });
@@ -86,7 +89,7 @@ export class SqliteDatabase implements DatabaseConnection {
         return run(this.statement(sql));
       } catch (cause) {
         const busy = toDatabaseError(this.path, sql, cause);
-        if (busy.code !== "DB_BUSY" || attempt >= BUSY_RETRY_DELAYS_MS.length) throw busy;
+        if (!this.retryBusy || busy.code !== "DB_BUSY" || attempt >= BUSY_RETRY_DELAYS_MS.length) throw busy;
         sleepSync(BUSY_RETRY_DELAYS_MS[attempt] ?? 80);
       }
     }

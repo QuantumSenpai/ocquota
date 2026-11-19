@@ -23,11 +23,12 @@ export class ConfigStore {
   load(cli: CliOverrides = {}): QuotaConfig {
     const configPath = this.options.configPath ?? defaultConfigPath(this.options.homeDir ?? homedir());
     const file = this.readFileConfig(configPath);
+    const env = this.options.env ?? process.env;
 
     const config: QuotaConfig = {
       ...DEFAULT_CONFIG,
       ...fromFile(file),
-      ...parseEnvOverrides(this.options.env ?? process.env),
+      ...parseEnvOverrides(env),
       ...parseCliOverrides(cli),
     };
     validateTimeZone(config.timezone);
@@ -65,6 +66,8 @@ function defaultConfigPath(homeDir: string): string {
 function fromFile(file: FileConfig): Partial<QuotaConfig> {
   const out: Partial<QuotaConfig> = {};
   if (file.dbPath !== undefined) out.dbPath = file.dbPath;
+  if (file.source !== undefined) out.source = file.source;
+  if (file.codexHome !== undefined) out.codexHome = file.codexHome;
   if (file.window !== undefined) out.window = file.window;
   if (file.metric !== undefined) out.metric = file.metric;
   if (file.limitTokens !== undefined) out.limitTokens = file.limitTokens;
@@ -73,6 +76,7 @@ function fromFile(file: FileConfig): Partial<QuotaConfig> {
   if (file.barWidth !== undefined) out.barWidth = file.barWidth;
   if (file.timezone !== undefined) out.timezone = file.timezone;
   else if (file.timezoneOffsetMinutes !== undefined) out.timezone = formatOffset(file.timezoneOffsetMinutes);
+  if (file.theme !== undefined) out.theme = file.theme;
   return out;
 }
 
