@@ -1,6 +1,7 @@
 import { clamp, formatAgo, formatCompact, formatCount, formatDuration, formatLocalDateTime, formatMoney, formatPercent } from "../core/format.ts";
 import type { TimeZone } from "../core/time.ts";
 import type { QuotaSnapshot, ThemeName } from "../core/types.ts";
+import { palettes, ansiRgb } from "../core/themes.ts";
 import type { Renderer } from "./renderer.ts";
 
 interface ThemeOptions {
@@ -13,12 +14,6 @@ interface ThemeOptions {
   limitConfigured?: boolean;
 }
 
-const PALETTES = {
-  aurora: { accent: "118;229;218", secondary: "183;166;245", muted: "142;155;174" },
-  ember: { accent: "245;181;112", secondary: "237;140;117", muted: "170;155;142" },
-  mono: { accent: "224;229;235", secondary: "184;194;207", muted: "142;155;174" },
-};
-
 export class ThemeRenderer implements Renderer {
   constructor(private readonly options: ThemeOptions) {}
 
@@ -26,7 +21,7 @@ export class ThemeRenderer implements Renderer {
     const { theme, timeZone, color } = this.options;
     const width = Math.max(1, Math.min(76, (this.options.columns ?? process.stdout.columns ?? 80) - 2));
     const compact = theme === "mono" || width < 46 || (this.options.rows ?? process.stdout.rows ?? 24) < 24;
-    const palette = PALETTES[theme];
+    const palette = { accent: ansiRgb(palettes[theme].accent), secondary: ansiRgb(palettes[theme].secondary), muted: "142;155;174" };
     const source = snapshot.source === "codex" ? "Codex" : "OpenCode";
     const countLabel = snapshot.source === "codex" ? "responses" : "messages";
     const spend = snapshot.costAvailable === false ? "N/A" : formatMoney(snapshot.cost);

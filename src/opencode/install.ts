@@ -3,6 +3,7 @@ import { randomUUID } from "node:crypto";
 import { homedir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { ConfigError } from "../core/errors.ts";
+import { motionOptions, type MotionStyle } from "../render/motion.ts";
 import { nativeThemes, type NativeTheme } from "./themes.ts";
 
 interface InstallOptions {
@@ -10,9 +11,12 @@ interface InstallOptions {
   pluginPath?: string;
   theme: NativeTheme;
   motion?: boolean;
+  animation?: MotionStyle;
+  speed?: number;
 }
 
 export function installOpenCode(options: InstallOptions): { configPath: string; pluginDir: string } {
+  const scene = motionOptions.parse({ animation: options.animation, speed: options.speed });
   const configDir = options.configDir ?? join(process.env["XDG_CONFIG_HOME"] || join(homedir(), ".config"), "opencode");
   const json = join(configDir, "cli.json");
   const jsonc = join(configDir, "cli.jsonc");
@@ -47,7 +51,7 @@ export function installOpenCode(options: InstallOptions): { configPath: string; 
   const previous = entries.find((entry) => typeof entry === "object" && entry !== null && "package" in entry && entry.package === pluginDir);
   const previousOptions = previous && typeof previous === "object" && "options" in previous && previous.options && typeof previous.options === "object" ? previous.options : {};
   config["plugins"] = [...entries.filter((entry) => entry !== pluginDir && !(typeof entry === "object" && entry !== null && "package" in entry && entry.package === pluginDir)),
-    { package: pluginDir, options: { ...previousOptions, motion: config["animations"] !== false } }];
+    { package: pluginDir, options: { ...previousOptions, theme: options.theme, ...(options.animation !== undefined ? { animation: scene.animation } : {}), ...(options.speed !== undefined ? { speed: scene.speed } : {}), motion: config["animations"] !== false } }];
   const currentTheme = config["theme"];
   config["theme"] = { ...(currentTheme && typeof currentTheme === "object" ? currentTheme : {}), name: `ocquota-${options.theme}` };
   if (original !== undefined) {

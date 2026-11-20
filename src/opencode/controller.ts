@@ -1,3 +1,5 @@
+import { motionOptions } from "../render/motion.ts";
+import { WORKSPACE_THEMES, palettes } from "../core/themes.ts";
 import { z } from "zod";
 import { ConfigStore } from "../config/config-store.ts";
 import { ConfigError } from "../core/errors.ts";
@@ -17,6 +19,9 @@ const schema = z.object({
   timezone: z.string().min(1).optional(),
   refreshMs: z.number().int().min(1000).optional(),
   motion: z.boolean().optional(),
+  theme: z.enum(WORKSPACE_THEMES).default("aurora"),
+  animation: motionOptions.shape.animation.optional(),
+  speed: motionOptions.shape.speed.optional(),
 });
 
 export function openNativeUsage(options: Readonly<Record<string, unknown>>) {
@@ -34,6 +39,6 @@ export function openNativeUsage(options: Readonly<Record<string, unknown>>) {
   const repository = new SqliteUsageRepository(db);
   const tracker = new IncrementalUsageTracker(repository, window);
   const service = new QuotaService(repository, window, { tokens: config.limitTokens, cost: config.limitCost }, config.metric, Date.now, tracker);
-  return { config, motion: input.motion !== false && process.env["OCQUOTA_REDUCED_MOTION"] !== "1",
+  return { config, scene: motionOptions.parse({ animation: input.animation ?? palettes[input.theme].motion, speed: input.speed }), motion: input.motion !== false && process.env["OCQUOTA_REDUCED_MOTION"] !== "1",
     refresh: () => service.snapshot(), close: () => db.close() };
 }

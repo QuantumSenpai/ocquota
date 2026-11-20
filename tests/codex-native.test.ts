@@ -2,6 +2,7 @@ import { expect, test } from "bun:test";
 import { mkdtempSync, readFileSync, readdirSync, rmSync, statSync, symlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { CODEX_THEMES } from "../src/codex/themes.ts";
 import { installCodex } from "../src/codex/install.ts";
 
 test("Codex installation preserves settings, backs up TOML and installs native themes and live stats", () => {
@@ -22,7 +23,7 @@ test("Codex installation preserves settings, backs up TOML and installs native t
     expect(config.tui.status_line).toContain("context-remaining");
     expect(config.tui.status_line).toContain("five-hour-limit");
     expect(config.tui.status_line).toContain("weekly-limit");
-    for (const name of ["aurora", "ember", "mono"]) {
+    for (const name of CODEX_THEMES) {
       const theme = readFileSync(join(home, "themes", `ocquota-${name}.tmTheme`), "utf8");
       expect(theme).toContain("<plist version=\"1.0\">");
       expect(theme).toContain("<key>settings</key>");

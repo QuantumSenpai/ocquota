@@ -4,7 +4,8 @@ export type QuotaMetric = "tokens" | "cost";
 export const USAGE_SOURCES = ["opencode", "codex"] as const;
 export type UsageSource = (typeof USAGE_SOURCES)[number];
 
-export const THEME_NAMES = ["aurora", "ember", "mono", "raw"] as const;
+import { WORKSPACE_THEMES } from "./themes.ts";
+export const THEME_NAMES = [...WORKSPACE_THEMES, "raw"] as const;
 export type ThemeName = (typeof THEME_NAMES)[number];
 
 export const WINDOW_KINDS: readonly WindowKind[] = ["day", "week", "month"];

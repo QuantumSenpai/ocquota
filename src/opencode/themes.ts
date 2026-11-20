@@ -1,6 +1,7 @@
 import type { ThemeDocument } from "@opencode/theme/tui";
 
-export type NativeTheme = "aurora" | "ember" | "mono";
+import { WORKSPACE_THEMES, palettes, type WorkspaceTheme } from "../core/themes.ts";
+export type NativeTheme = WorkspaceTheme;
 
 function mix(a: string, b: string, weight: number): string {
   const rgb = [0, 2, 4].map((offset) => Math.round(
@@ -43,10 +44,11 @@ const base: ThemeDocument["base"] = {
 };
 
 function theme(name: NativeTheme): ThemeDocument {
-  const accent = name === "ember" ? "orange" : name === "mono" ? "gray" : "cyan";
-  const colors = { gray: "#8391a7", red: "#ef858e", orange: "#eeb477", yellow: "#e5ce8d", green: "#9ccfa4", cyan: "#76d8cd", blue: "#8eafe9", purple: "#b6a3e9" };
+  const accent = "custom";
+  const palette = palettes[name];
+  const colors = { custom: palette.accent, gray: "#8391a7", red: "#ef858e", orange: "#eeb477", yellow: "#e5ce8d", green: "#9ccfa4", cyan: "#76d8cd", blue: "#8eafe9", purple: "#b6a3e9" };
   const mode = (light: boolean) => {
-    const background = light ? (name === "ember" ? "#faf5ee" : "#f5f7fa") : (name === "ember" ? "#191512" : "#111722");
+    const background = light ? (name === "ember" ? "#faf5ee" : "#f5f7fa") : palette.background;
     const hue = Object.fromEntries(Object.entries(colors).map(([key, color]) => [key, scale(color, background, light)]));
     return { hue: { ...hue, accent: `$hue.${accent}`, interactive: `$hue.${accent}`, neutral: "$hue.gray" } };
   };
@@ -60,4 +62,4 @@ function theme(name: NativeTheme): ThemeDocument {
   return { $schema: "https://opencode.ai/theme.json", base: tokens, light: mode(true), dark: mode(false) };
 }
 
-export const nativeThemes: Record<NativeTheme, ThemeDocument> = { aurora: theme("aurora"), ember: theme("ember"), mono: theme("mono") };
+export const nativeThemes = Object.fromEntries(WORKSPACE_THEMES.map((name) => [name, theme(name)])) as Record<NativeTheme, ThemeDocument>;

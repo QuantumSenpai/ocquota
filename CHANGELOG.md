@@ -1,6 +1,11 @@
 # Changelog
 
-## Unreleased
+## 0.4.0 — 2026-11-20
+
+- Add ten workspace themes: Sakura, Forest, Ocean, Midnight, Matcha, Lavender, Rose, Sand, Glacier and Neon, alongside Aurora, Ember and Mono.
+- Add ten bounded ambient motion scenes with live pause, style and speed controls in OpenCode and the standalone watch view.
+- Show input/output, reasoning and cache statistics directly in the OpenCode sidebar; install all thirteen themes for Codex with live native footer statistics.
+- Add an animated SVG README banner, original SVG logo, full setup instructions and honest integration boundaries.
 
 - Add a standalone Windows x64 executable build with bundled Bun and native plugin files.
 - Fix native OpenCode installation from compiled executables.

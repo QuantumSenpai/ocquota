@@ -7,7 +7,7 @@ import { ConfigError } from "../core/errors.ts";
 import { CODEX_THEMES, codexStatusLines, codexTheme, type CodexTheme } from "./themes.ts";
 
 export function installCodex(options: { codexHome?: string; theme: CodexTheme; motion?: boolean }): { configPath: string; backupPath?: string } {
-  if (!CODEX_THEMES.includes(options.theme)) throw new ConfigError("Native Codex theme must be aurora, ember or mono.");
+  if (!CODEX_THEMES.includes(options.theme)) throw new ConfigError("Unknown native Codex theme. Run ocquota themes.");
   const home = resolve(options.codexHome ?? (process.env["OCQUOTA_CODEX_HOME"] || process.env["CODEX_HOME"] || join(homedir(), ".codex")));
   const configPath = join(home, "config.toml");
   const original = existsSync(configPath) ? readFileSync(configPath, "utf8") : undefined;

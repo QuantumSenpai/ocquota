@@ -13,7 +13,7 @@ test("native sidebar renders real OpenTUI elements and updates budget state", as
   const context = { theme: resolveThemeDocument(nativeThemes.aurora, "dark"), data: { session: { cost: () => 1.25 } } };
   const [snapshot, setSnapshot] = createSignal<QuotaSnapshot | undefined>(DEMO_SNAPSHOT);
   const [error, setError] = createSignal("");
-  const view = await testRender(() => <NativeSidebar context={context} snapshot={snapshot} error={error} motion={false} sessionID="test" />, { width: 34, height: 18 });
+  const view = await testRender(() => <NativeSidebar context={context} snapshot={snapshot} error={error} motion={false} sessionID="test" />, { width: 40, height: 25 });
   try {
     await view.renderOnce();
     const frame = view.captureCharFrame();
@@ -21,6 +21,8 @@ test("native sidebar renders real OpenTUI elements and updates budget state", as
     expect(frame).toContain("37.2%");
     expect(frame).toContain("1.9M / 5M");
     expect(frame).toContain("This session $1.25");
+    expect(frame).toContain("Reasoning 180K");
+    expect(frame).toContain("Cache read 8.4M");
     setSnapshot({ ...DEMO_SNAPSHOT, used: 6_000_000, percent: 1.2 });
     await view.renderOnce();
     expect(view.captureCharFrame()).toContain("1M over budget");
@@ -60,6 +62,11 @@ test("native plugin registers reachable slash commands backed by database usage 
     expect(layer?.mode).toBe("global");
     const command = layer?.commands?.find((item) => item.slash?.name === "ocquota");
     expect(command).toBeDefined();
+    for (const name of ["motion", "motion-next", "motion-faster", "motion-slower"]) {
+      const control = layer?.commands?.find((item) => item.slash?.name === name);
+      expect(control).toBeDefined();
+      await control!.run();
+    }
     await command!.run();
     expect(message).toContain("123 tokens");
     expect(message).toContain("877 remaining");
@@ -68,4 +75,22 @@ test("native plugin registers reachable slash commands backed by database usage 
     fixture.close();
   }
   expect(disposed).toBe(3);
+});
+
+test("native ambient strip responds to live pause and scene changes", async () => {
+  const { NativeScene } = await import("../src/opencode/tui.tsx");
+  const context = { theme: resolveThemeDocument(nativeThemes.sakura, "dark"), data: { session: { cost: () => 0 } } };
+  const [enabled, setEnabled] = createSignal(true);
+  const [style, setStyle] = createSignal<"sakura" | "rain">("sakura");
+  const view = await testRender(() => <NativeScene context={context} snapshot={() => undefined} error={() => ""} motion={enabled()} animation={style()} speed={0.75} />, { width: 24, height: 5 });
+  try {
+    await view.renderOnce();
+    expect(view.captureCharFrame()).toContain("sakura · 0.75x");
+    setStyle("rain");
+    await view.renderOnce();
+    expect(view.captureCharFrame()).toContain("rain · 0.75x");
+    setEnabled(false);
+    await view.renderOnce();
+    expect(view.captureCharFrame().trim()).toBe("");
+  } finally { await view.dispose(); }
 });

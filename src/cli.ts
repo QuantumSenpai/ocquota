@@ -15,7 +15,18 @@ import { DEFAULT_CONFIG } from "./config/schema.ts";
 import { FullRenderer } from "./render/full-renderer.ts";
 import { ProgressBar } from "./render/progress-bar.ts";
 import { installOpenCode } from "./opencode/install.ts";
+import { WORKSPACE_THEMES, palettes } from "./core/themes.ts";
+import { motionOptions, renderMotion, MotionControls } from "./render/motion.ts";
 import { installCodex } from "./codex/install.ts";
+
+function isWorkspaceTheme(name: string): name is (typeof WORKSPACE_THEMES)[number] { return (WORKSPACE_THEMES as readonly string[]).includes(name); }
+function sceneOptions(options: RawOptions, theme: string) {
+  const animation = options.animation ?? process.env["OCQUOTA_ANIMATION"] ?? (isWorkspaceTheme(theme) ? palettes[theme].motion : "sakura");
+  const rawSpeed = String(options.speed ?? process.env["OCQUOTA_SPEED"] ?? "1");
+  const parsed = motionOptions.safeParse({ animation, speed: rawSpeed.trim() ? Number(rawSpeed) : NaN });
+  if (!parsed.success) throw new ConfigError("Animation expects a listed scene and --speed between 0.25 and 3.");
+  return parsed.data;
+}
 
 function report(render: (app: App) => string): (options: RawOptions) => void {
   return withApp((app) => writeLine(render(app)));
@@ -52,25 +63,28 @@ function main(): void {
   cli.option("--tz <zone>", 'IANA zone or offset, e.g. "Asia/Kolkata" or "+05:30"');
   cli.option("--days <n>", "daily: how many local days to show (default 7)");
   cli.option("--n <rows>", "top: how many sessions to show (default 5)");
-  cli.option("--theme <name>", "Workspace style: aurora | ember | mono | raw (default aurora)");
+  cli.option("--theme <name>", "Workspace theme (run ocquota themes; default aurora)");
+  cli.option("--animation <name>", "Scene: sakura | rain | leaves | wind | snow | fireflies | stars | bubbles | embers | waves");
+  cli.option("--speed <number>", "Animation speed, 0.25 to 3 (default 1)");
   cli.option("--no-motion", "Disable watch-mode animation");
 
   cli.command("opencode-install", "Install native themes and quota stats inside OpenCode 2.3+").action((options: RawOptions) => {
     const theme = options.theme ?? "aurora";
-    if (theme !== "aurora" && theme !== "ember" && theme !== "mono") throw new ConfigError("Native OpenCode theme must be aurora, ember or mono.");
-    const result = installOpenCode({ theme, ...(options.motion === false ? { motion: false } : {}) });
+    if (!isWorkspaceTheme(theme)) throw new ConfigError("Unknown workspace theme. Run ocquota themes.");
+    const result = installOpenCode({ theme, ...sceneOptions(options, theme), ...(options.motion === false ? { motion: false } : {}) });
     writeLine(`Native OpenCode integration installed.\nConfig: ${result.configPath}\nRestart OpenCode, then use /ocquota or /themes.\nPrevious settings were backed up alongside cli.json.`);
   });
 
   cli.command("codex-install", "Install native themes and live status-line stats inside Codex CLI").action((options: RawOptions) => {
     const theme = options.theme ?? "aurora";
-    if (theme !== "aurora" && theme !== "ember" && theme !== "mono") throw new ConfigError("Native Codex theme must be aurora, ember or mono.");
+    if (!isWorkspaceTheme(theme)) throw new ConfigError("Unknown workspace theme. Run ocquota themes.");
+    const scene = sceneOptions(options, theme);
     const result = installCodex({ theme, ...(options.codexHome ? { codexHome: options.codexHome } : {}), ...(options.motion === false ? { motion: false } : {}) });
-    writeLine(`Native Codex themes and status-line stats installed.\nConfig: ${result.configPath}\nRestart Codex, then use /theme, /statusline or /status.${result.backupPath ? `\nBackup: ${result.backupPath}` : ""}\nThemes style syntax, diffs and the native footer. Stats use Codex's live session data.`);
+    writeLine(`Native Codex themes and status-line stats installed.\nConfig: ${result.configPath}\nRestart Codex, then use /theme, /statusline or /status.${result.backupPath ? `\nBackup: ${result.backupPath}` : ""}\nThemes style syntax, diffs and the native footer. Stats use Codex's live session data.\nCustom scenes run in a separate companion pane: ocquota watch --source codex --theme ${theme} --animation ${scene.animation}`);
   });
 
   cli.command("themes", "List available workspace themes").action(() => {
-    writeLine("aurora  Cyan and violet · spacious usage overview\nember   Amber and coral · budget and focus\nmono    Neutral ink · compact and quiet\nraw     Original quota bar\n\nPreview: ocquota preview --theme aurora");
+    writeLine(WORKSPACE_THEMES.map((name) => `${name.padEnd(10)}${palettes[name].description}`).join("\n") + "\nraw       Original quota bar\n\nPreview: ocquota preview --theme sakura\nMotions: sakura, rain, leaves, wind, snow, fireflies, stars, bubbles, embers, waves");
   });
   cli.command("preview", "Preview a theme using sample data; no database required").action((options: RawOptions) => {
     const { theme, source } = new ConfigStore().load({ theme: options.theme, source: options.source });
@@ -81,6 +95,8 @@ function main(): void {
     } else {
       writeLine(new ThemeRenderer({ theme, timeZone: createTimeZone("UTC"), color: COLORS.isColorSupported }).render(sample));
     }
+    const scene = sceneOptions(options, theme);
+    if (options.motion !== false && process.env["OCQUOTA_REDUCED_MOTION"] !== "1") writeLine(renderMotion(scene.animation, 1200 * scene.speed, 48, 4));
     writeLine(COLORS.dim(`\nThemes: ${THEME_NAMES.join(" · ")}\nUse: ocquota watch --source ${source} --theme ${theme}`));
   });
 
@@ -88,17 +104,34 @@ function main(): void {
   cli.command("bar", "Show the quota bar (alias of the default command)").action(withApp((app) => writeLine(fullRenderer(app).render(app.service.snapshot()))));
 
   cli.command("watch", "Refresh the quota bar until Ctrl-C").action((options: RawOptions) => {
+    const scene = sceneOptions(options, options.theme ?? process.env["OCQUOTA_THEME"] ?? "aurora");
     const app = buildApp(options, true);
     const renderer = fullRenderer(app, true);
     let snapshot: QuotaSnapshot;
     let frame = 0;
     const motion = process.stdout.isTTY && app.config.theme !== "raw" && options.motion !== false && process.env["OCQUOTA_REDUCED_MOTION"] !== "1" && process.env["TERM"] !== "dumb";
+    if (!options.animation && !process.env["OCQUOTA_ANIMATION"] && app.config.theme !== "raw") scene.animation = palettes[app.config.theme].motion as typeof scene.animation;
+    const controls = new MotionControls(scene.animation, scene.speed);
+    let elapsed = 0;
+    let lastFrame = performance.now();
+    const decorate = (output: string) => {
+      if (!motion) return output;
+      const now = performance.now();
+      if (!controls.paused) elapsed += (now - lastFrame) * controls.speed;
+      lastFrame = now;
+      const width = Math.max(1, Math.min(76, (process.stdout.columns || 80) - 2));
+      const scene = renderMotion(controls.style, elapsed, width, 4);
+      const label = `${controls.style} · ${controls.speed}x${controls.paused ? " · paused" : ""}`.slice(0, width);
+      const help = "Space pause · n scene · +/- speed · q quit".slice(0, width);
+      return `${scene}\n ${label}\n${output}\n ${help}`;
+    };
     const loop = new WatchLoop({
       render: () => {
         snapshot = app.service.snapshot();
-        return renderer.render(snapshot, motion ? frame : undefined);
+        return decorate(renderer.render(snapshot, motion ? frame : undefined));
       },
-      ...(motion ? { animate: () => renderer.render(snapshot, ++frame) } : {}),
+      ...(motion ? { animate: () => decorate(renderer.render(snapshot, controls.paused ? frame : ++frame)) } : {}),
+      ...(motion ? { onKey: (key: string) => { controls.handle(key); } } : {}),
       refreshMs: app.config.refreshMs,
       colors: COLORS,
       onClose: () => app.close(),

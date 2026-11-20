@@ -1,265 +1,264 @@
+<p align="center">
+  <img src="https://raw.githubusercontent.com/QuantumSenpai/ocquota/main/assets/banner.svg" alt="ocquota — Your coding window, in bloom. Thirteen themes, ten ambient scenes and live usage statistics." width="1280">
+</p>
+
+<p align="center">
+  <a href="https://www.npmjs.com/package/@kyzenn.raw/ocquota">npm</a> ·
+  <a href="https://github.com/QuantumSenpai/ocquota/releases/latest">Downloads</a> ·
+  <a href="https://github.com/QuantumSenpai/ocquota/actions/workflows/compatibility.yml">Windows / macOS / Linux CI</a> ·
+  <a href="LICENSE">MIT</a>
+</p>
+
 # ocquota
 
-A local, read-only usage and theme integration for OpenCode, with Codex usage
-reports too. Track tokens or cost against your own daily, weekly, or monthly budget.
+Local, read-only usage statistics with calm workspace themes and a little atmosphere.
+Cherry blossoms, rain, drifting leaves and seven more ambient scenes live in their
+own small strip, leaving your code and statistics easy to read.
 
-Requires Bun. The native integration targets OpenCode 2.3.2+. OpenCode uses its
-local SQLite database; Codex uses local session rollout files. Codex reports are
-available in the CLI. Claude Code support is still planned.
+**13 themes · 10 scenes · live pause and speed controls · no telemetry**
 
-Native OpenCode integration is included from version 0.2.0.
+## Install or update
 
-Install globally using either package manager:
+The npm package requires **Bun 1.4.4+** on your PATH. If needed, install it with
+`npm install -g bun`, then:
 
 ```sh
-npm install -g @kyzenn.raw/ocquota
-# or: bun add -g @kyzenn.raw/ocquota
+npm install -g @kyzenn.raw/ocquota@latest
+ocquota --version
+ocquota themes
+ocquota preview --theme sakura
+```
 
-ocquota opencode-install --theme aurora
+Or use `bun add -g @kyzenn.raw/ocquota`. The standalone Windows x64 ZIP bundles
+Bun; extract **all files** together and use `.\ocquota.exe` in PowerShell.
+Windows 10 1809+ / Windows 11 are supported. Native CI also covers macOS and Linux.
+
+## OpenCode: themes, live stats and ambient motion inside your workspace
+
+Requires **OpenCode 2.3.2+**.
+
+```sh
+ocquota opencode-install --theme sakura --animation sakura --speed 0.75
 opencode
 ```
 
-### Windows
+Restart OpenCode after installing. The native sidebar shows your local budget,
+remaining tokens or cost, total tokens, input/output tokens, reasoning tokens,
+cache reads/writes, sessions, messages, reset time, burn rate, projection and
+current-session cost. A compact footer keeps your quota visible while you code.
 
-Use Windows 10 (1809+) or Windows 11 with PowerShell / Windows Terminal.
-For the npm package, install Bun 1.4.4+ first (`npm install -g bun`), then:
+Inside OpenCode:
 
-```powershell
-npm install -g @kyzenn.raw/ocquota@latest
-ocquota preview --source codex --theme ember
-ocquota codex-install --theme aurora
-# Or, for OpenCode:
-ocquota opencode-install --theme aurora
-```
+| Command | What it does |
+| --- | --- |
+| `/ocquota` | Usage and local-budget details |
+| `/themes` | Switch the workspace to any `ocquota-*` theme |
+| `/motion` | Pause or resume the ambient strip |
+| `/motion-next` | Cycle through the ten scenes |
+| `/motion-faster` | Increase speed, up to 3× |
+| `/motion-slower` | Decrease speed, down to 0.25× |
 
-A standalone Windows x64 build is also available from the Compatibility
-workflow's `ocquota-windows-x64` artifact. Extract the entire ZIP to one folder
-and run `./ocquota.exe`; it includes Bun, so no runtime installation is needed.
-Keep `tui.tsx` and `tui-runtime.js` beside the executable for OpenCode setup.
-
-```powershell
-.\ocquota.exe codex-install --theme aurora
-.\ocquota.exe watch --source codex --theme aurora
-```
-
-Native Windows reads `%USERPROFILE%\.codex` for Codex and
-`%USERPROFILE%\.local\share\opencode\opencode.db` for OpenCode.
-Use `--codex-home "C:\path with spaces\.codex"` or `--db "C:\path\opencode.db"`
-for custom locations. WSL keeps its own sessions; run ocquota inside WSL to
-read those. Build the ZIP contents locally with `bun run build:windows`.
-
-Inside OpenCode, use `/ocquota` for statistics and `/themes` to switch themes.
-For Codex CLI native themes and live footer stats, see the Codex setup below.
-The standalone usage view is `ocquota watch --source codex --theme aurora`.
-
-### Native Codex CLI setup
-
-Install or update to ocquota 0.3.0 or newer:
-
-```bash
-npm install -g @kyzenn.raw/ocquota@latest
-ocquota codex-install --theme aurora
-codex
-```
-
-Restart Codex after setup. Use `/theme` to switch between `ocquota-aurora`,
-`ocquota-ember` and `ocquota-mono`; use `/statusline` to customize the native
-footer and `/status` for account/session details. Verified with Codex CLI 0.170.0.
-
-The themes color syntax highlighting, diffs and the native footer. Codex keeps
-control of the terminal background and the rest of its UI. The footer uses
-Codex's live data: Aurora emphasizes context and tokens, Ember prioritizes
-5-hour/weekly limits and input/output tokens, and Mono starts with a compact
-model/context/token layout. Limits appear when supplied by the account; these
-are account limits, separate from ocquota's configurable local token budget.
-Existing footer items are retained, including when changing theme presets.
-
-The installer respects `--codex-home`, `OCQUOTA_CODEX_HOME`, then `CODEX_HOME`
-(default `~/.codex`). It preserves settings, creates a private verbatim backup
-of `config.toml`, and installs `.tmTheme` files under `themes/`. TOML formatting
-and comments are normalized in the active config; the original remains in the
-backup. Use `--no-motion` to disable Codex animations; existing animation
-preferences otherwise remain in effect. No extra background process is needed.
-
-See the official [CLI customization guide](https://learn.chatgpt.com/docs/cli-customization)
-and [Codex 0.170.0 TUI configuration schema](https://github.com/openai/codex/blob/rust-v0.170.0/codex-rs/core/config.schema.json).
-
-Bun 1.4.4 or newer must be installed and on your PATH, including when using npm
-to install this package. The npm package contains a bundled CLI, so users do not
-need to clone this repository or install development dependencies. Run
-`ocquota --help` from any directory after installation.
-
-To try it from a source checkout:
-
-```sh
-bun install
-bun src/cli.ts themes
-bun src/cli.ts preview --theme aurora
-bun src/cli.ts watch --theme ember
-bun src/cli.ts watch --source codex --theme aurora
-```
-
-To put themes and statistics **inside OpenCode** from this source checkout:
-
-```sh
-bun run build
-bun dist/cli.js opencode-install --theme aurora
-opencode
-```
-
-The installer copies a native TUI plugin, installs three whole-workspace themes,
-backs up the existing `cli.json`/`cli.jsonc`, and preserves other plugins and
-settings. JSONC values are preserved; a verbatim backup retains original comments.
-Restart OpenCode after installation. Then use:
-
-- `/ocquota` for detailed usage and budget statistics.
-- `/themes` → `ocquota-aurora`, `ocquota-ember`, or `ocquota-mono` to style OpenCode itself.
-- The built-in session sidebar for the budget meter and current-session cost.
-- The prompt footer for compact usage, including when the sidebar is hidden.
-
-Use `--no-motion` with the installer to disable animation. Settings are stored in
-`~/.config/opencode/cli.json` (or `$XDG_CONFIG_HOME/opencode/cli.json`). Local
-OpenCode database usage is labeled as a local budget, independent of provider
-account limits. The plugin opens the database read-only and releases it on unload.
-
-The native plugin can also be loaded through `plugins` in OpenCode's `cli.json`:
+Live controls apply to the current OpenCode session. To persist your choice,
+rerun the installer with `--animation` and `--speed`, or edit the plugin options:
 
 ```json
 {
   "plugins": [{
-    "package": "@kyzenn.raw/ocquota@0.3.0",
-    "options": { "limitTokens": 5000000, "window": "day", "motion": true }
+    "package": "@kyzenn.raw/ocquota@0.4.0",
+    "options": {
+      "theme": "sakura",
+      "animation": "sakura",
+      "speed": 0.75,
+      "motion": true,
+      "limitTokens": 5000000,
+      "window": "day",
+      "refreshMs": 2000
+    }
   }]
 }
 ```
 
-Custom themes still need the installer because OpenCode loads theme JSON
-separately from TUI plugins.
-The plugin uses OpenCode's [native slots and commands](https://opencode.ai/docs/build/plugins/cli/)
-and [custom theme format](https://opencode.ai/docs/cli/theme/).
+The installer copies the plugin locally and installs theme files into
+`~/.config/opencode/themes`. If `XDG_CONFIG_HOME` is set, it uses that directory
+instead. Preserve the installer's local `package` path when editing its options.
+For themes, run the installer even if you load the plugin directly from npm.
+Existing settings and plugins are preserved; config backups sit beside `cli.json`
+or `cli.jsonc`. JSONC comments survive in the verbatim backup; the updated file
+is formatted JSON. Existing global `animations: false` is respected.
 
-Development audit note: the matching OpenCode/OpenTUI SDKs currently bring two
-moderate upstream advisory groups in `glob` and `minimatch`. Those packages are
-development dependencies and are not bundled into ocquota's release artifacts.
-The installed plugin uses OpenCode's own UI runtime. Recheck these advisories
-when updating the SDK versions.
+## Codex: native themes and footer stats
 
-| Theme | Style |
+```sh
+ocquota codex-install --theme sakura
+codex
+```
+
+Restart Codex. `/theme` selects any of the thirteen `ocquota-*` themes;
+`/statusline` customizes built-in footer items. Themes color syntax, diffs and the
+native footer; Codex controls its background and the rest of its UI.
+
+New theme presets include model/reasoning mode, context remaining, used tokens,
+input/output tokens, and five-hour/weekly account limits. Existing footer items
+are retained. Account limit indicators appear when supplied by the account.
+Use `/status` for further account/session details.
+
+**Codex does not expose an arbitrary animated UI slot.** Falling scenes and the
+complete local usage dashboard run in a separate terminal pane alongside Codex:
+
+```sh
+ocquota watch --source codex --theme sakura --animation sakura --speed 0.75
+```
+
+This companion follows live session logs without changing or wrapping Codex.
+Codex logs do not supply billed dollar cost; reports display `N/A` for cost and
+reject `--metric cost`. Local budgets are separate from provider account limits.
+
+Codex setup respects `--codex-home`, `OCQUOTA_CODEX_HOME`, then `CODEX_HOME`,
+then `~/.codex`. Existing TOML settings are preserved, with a private config
+backup before changes. `--no-motion` disables Codex's native animations.
+
+## Pick a theme
+
+The ten new themes join Aurora, Ember and Mono. All thirteen are available for
+the standalone CLI, OpenCode (light and dark) and Codex syntax/footer themes.
+
+| Theme | Palette | Default scene |
+| --- | --- | --- |
+| `sakura` | Cherry blossom pink / soft violet | Sakura |
+| `forest` | Fern green / woodland | Leaves |
+| `ocean` | Tidal blue / sea glass | Waves |
+| `midnight` | Indigo / silver | Stars |
+| `matcha` | Moss / oat | Wind |
+| `lavender` | Lilac / muted blue | Fireflies |
+| `rose` | Rose clay / warm blush | Sakura |
+| `sand` | Linen / soft gold | Wind |
+| `glacier` | Pale cyan / ice blue | Snow |
+| `neon` | Lime / lilac | Rain |
+| `aurora` | Cyan / violet | Stars |
+| `ember` | Amber / coral | Embers |
+| `mono` | Neutral ink | Snow |
+
+`--theme raw` keeps the original quota-bar layout. Preview any theme without a
+database with `ocquota preview --theme forest --animation leaves`.
+
+## Ten scenes, at your pace
+
+| Scene | Motion |
 | --- | --- |
-| `aurora` | Cyan and violet, spacious overview, token breakdown and reset time. Default. |
-| `ember` | Amber and coral, remaining budget first, spend and pace. |
-| `mono` | Compact essentials using your terminal's own foreground, for light or dark backgrounds. |
-| `raw` | Original four-line quota bar. |
-
-`preview` uses clearly labeled sample data and needs no database. Themes change
-presentation, never the underlying usage. Narrow or short terminals use a compact
-layout; very short watch panes show an enlargement hint instead of scrolling.
-Colors follow terminal color detection and `NO_COLOR`; themes use RGB foreground
-colors and leave your terminal background intact.
-
-Watch mode uses a subtle live indicator and redraws in place in the terminal's
-alternate screen, restoring your previous screen and cursor when you exit with
-Ctrl-C. Animation reuses the latest snapshot; it does not query the database on
-each animation frame. For still output, use `--no-motion` or set
-`OCQUOTA_REDUCED_MOTION=1`. Piped watch output prints once without animation.
+| `sakura` | Cherry petals drifting down |
+| `rain` | Light vertical rainfall |
+| `leaves` | Green leaves drifting with a breeze |
+| `wind` | Horizontal wisps |
+| `snow` | Slow snowflakes |
+| `fireflies` | Gently flickering lights |
+| `stars` | Quiet twinkling sky |
+| `bubbles` | Rising rings |
+| `embers` | Warm rising sparks |
+| `waves` | A moving wave line |
 
 ```sh
-bun src/cli.ts watch --theme mono --no-motion
-bun src/cli.ts --theme raw
-bun src/cli.ts json
-bun src/cli.ts daily --days 7
-bun src/cli.ts models
-bun src/cli.ts top --n 5
+ocquota watch --theme forest --animation leaves --speed 0.5
+ocquota watch --source codex --theme ocean --animation waves
+ocquota watch --theme mono --no-motion
 ```
 
-Configuration precedence is CLI flags, `OCQUOTA_*` environment variables,
-`~/.config/ocquota/config.json`, then defaults. Save a preference with the `theme`
-config key or `OCQUOTA_THEME=ember`. An existing config without `theme` uses Aurora.
+In an interactive watch terminal: **Space** pauses, **n** changes scene,
+**+ / -** adjusts speed and **q / Ctrl-C** exits. Stats keep refreshing while
+motion is paused. `--speed` accepts 0.25–3; it changes movement speed without
+increasing frame rate. The current scene and speed are shown in the strip.
 
-Common flags: `--db <path>`, `--window day|week|month`, `--limit <tokens>`,
-`--metric tokens|cost`, `--limit-cost <usd>`, `--refresh <ms>`, and `--tz <zone>`.
-The default database is `~/.local/share/opencode/opencode.db` (`OCQUOTA_DB` to
-override), and the default budget is 5 million tokens per local day.
-
-Countable tokens include input, output, reasoning and cache writes; cache reads
-are shown separately and excluded. Budgets are local preferences, not provider
-account limits. Watch mode settles messages after a 10-minute grace period;
-updates to older messages are picked up when watch restarts. Pace estimates need
-multiple samples and do not persist between runs.
-
-Codex usage:
+`OCQUOTA_ANIMATION` and `OCQUOTA_SPEED` set CLI defaults. Set
+`OCQUOTA_REDUCED_MOTION=1` to disable ambient motion and meter interpolation.
+For a persistent OpenCode setup without motion, run:
 
 ```sh
-bun src/cli.ts preview --source codex --theme ember
-bun src/cli.ts watch --source codex --theme aurora
-bun src/cli.ts json --source codex
-bun src/cli.ts models --source codex
-bun src/cli.ts daily --source codex --days 7
-bun src/cli.ts top --source codex --n 5
+ocquota opencode-install --theme sakura --no-motion
 ```
 
-Use `--codex-home <path>` for a custom Codex home. The path precedence is
-`--codex-home`, `OCQUOTA_CODEX_HOME`, `CODEX_HOME`, the `codexHome` config key,
-then `~/.codex`. Set `OCQUOTA_SOURCE=codex` or add `"source": "codex"` to your
-ocquota config to make Codex the default. OpenCode remains the default otherwise.
+Ambient motion is confined to a small fixed strip, capped at 24 particles and
+roughly 6 frames/second. Data refreshes independently, using cached/incremental
+reads. Timers stop on disposal; watch restores the terminal and input mode on
+exit. Piped watch output is one static report. Glyph appearance depends on your
+terminal font; modern Windows Terminal, macOS Terminal and iTerm2 work best.
+The README SVG banner also respects browser reduced-motion preferences.
 
-The Codex reader scans `sessions/` and `archived_sessions/`, including
-`.jsonl.zst` files, without opening an OpenCode database. It prefers per-response
-usage records for files that contain them; older `token_count` events are a
-fallback for files without per-response records. Both formats are never added
-together, since their cumulative accounting can diverge after resume/compaction. Repeated
-usage snapshots, copied response IDs and rate-limit-only events are not counted
-again. Usage is assigned to the time it was recorded, not the session's start.
-In Codex views, "responses" (or "calls" in tables) counts recorded usage events;
-the JSON field remains `messages` for compatibility.
-
-Codex cached input and reasoning are subsets of input and output. The adapter
-splits out those subsets so the same countable-token formula applies to both
-sources: fresh input + visible output + reasoning + cache writes. Cached reads
-stay excluded. This follows the
-[Codex token usage protocol](https://github.com/openai/codex/blob/main/codex-rs/protocol/src/protocol.rs)
-and [Responses usage conversion](https://github.com/openai/codex/blob/main/codex-rs/codex-api/src/sse/responses.rs).
-
-Codex logs do not supply billed USD cost: terminal reports show `N/A`, JSON
-returns `cost: null` and `costAvailable: false`, and `--metric cost` is rejected
-for this source. The local token budget is separate from your account's provider
-rate limits. No pricing estimates are invented.
-
-Codex watch caches parsed usage in memory and reads only appended bytes from
-changed plain JSONL files. Rewritten or replaced files are rebuilt; changed
-compressed files are decompressed again. It does not use OpenCode's settlement
-grace period. Initial startup reads the available rollout history; later refreshes
-still scan cached usage events to calculate the requested window. No extra
-database, credentials, conversation text storage or Codex config changes are used.
-
-Development checks:
+## Reports and budgets
 
 ```sh
-bun test
-bun run typecheck
-bun run build
+ocquota                                      # today's local quota
+ocquota watch --limit 5000000 --window day
+ocquota watch --source codex --window week
+ocquota bar --metric cost --limit-cost 20      # OpenCode only
+ocquota oneline
+ocquota json
+ocquota totals
+ocquota models
+ocquota daily --days 14
+ocquota top --n 10
+ocquota explain
 ```
 
-Maintainer release workflow (from this repository):
+Every report supports `--source opencode|codex`. Windows, macOS and Linux use
+native paths; quote paths with spaces:
+
+```powershell
+ocquota watch --source codex --codex-home "C:\Users\Your Name\.codex"
+ocquota watch --db "C:\path with spaces\opencode.db"
+```
+
+Default OpenCode database: `~/.local/share/opencode/opencode.db`.
+Default Codex logs: `~/.codex/sessions` and `~/.codex/archived_sessions`, including
+plain and Zstandard-compressed JSONL. On Windows `~` means your user profile.
+WSL keeps its own sessions; run ocquota inside WSL to read those sessions.
+
+Config lives at `~/.config/ocquota/config.json`. Precedence is CLI → environment
+→ config file → defaults. Useful options:
+
+| CLI | Environment | Purpose |
+| --- | --- | --- |
+| `--db` | `OCQUOTA_DB` | OpenCode SQLite database |
+| `--source` | `OCQUOTA_SOURCE` | Usage source |
+| `--codex-home` | `OCQUOTA_CODEX_HOME`, `CODEX_HOME` | Codex home |
+| `--theme` | `OCQUOTA_THEME` | Appearance |
+| `--window` | `OCQUOTA_WINDOW` | `day`, `week`, `month` |
+| `--limit` | `OCQUOTA_LIMIT` | Local token budget |
+| `--limit-cost` | `OCQUOTA_LIMIT_COST` | Local cost budget, or `none` |
+| `--metric` | `OCQUOTA_METRIC` | `tokens` or `cost` |
+| `--refresh` | `OCQUOTA_REFRESH_MS` | Data refresh interval (250ms minimum) |
+| `--tz` | `OCQUOTA_TZ` | IANA zone or UTC offset |
+| `--animation` | `OCQUOTA_ANIMATION` | Decorative scene |
+| `--speed` | `OCQUOTA_SPEED` | Movement multiplier |
+
+Day/week/month windows follow your selected timezone, including DST. Cached reads
+are excluded from the token budget. Session logs are deduplicated; file changes
+are incrementally parsed. OpenCode access is read-only and native plugin reads
+fail quickly on busy databases. No telemetry, network reporting or credential access.
+
+## Build and verify
 
 ```sh
 bun install --frozen-lockfile
-bun audit
-npm pack --dry-run
-npm login
-npm publish --access public
+bun run typecheck
+bun run build
+bun test
+bun run build:windows
 ```
 
-`npm pack` builds the CLI and includes only the bundled executable, bundled
-library licenses, package metadata, README, changelog and license. Tests verify
-that the tarball installs offline and runs outside the repository. Publishing
-also runs type checking and the test suite first. npm authentication is handled
-by `npm login`; never put registry credentials in source files.
-
-For a local installation before publication:
+The Windows build writes `dist/windows-x64/ocquota.exe` with native plugin files,
+licenses and docs. Keep the folder together. CI builds a downloadable ZIP and
+tests offline npm installation, standalone installation, real OpenTUI rendering,
+settings preservation, light/dark contrast and Windows/macOS/Linux compatibility.
 
 ```sh
 npm pack
-npm install -g ./kyzenn.raw-ocquota-0.3.0.tgz
-ocquota preview --source codex --theme ember
+npm install -g ./kyzenn.raw-ocquota-0.4.0.tgz
 ```
+
+The npm package includes the bundled CLI, native TUI source/runtime and licenses.
+`npm publish` runs type checking and tests first. Publishing requires npm login.
+The [logo](assets/logo.svg) and [animated banner](assets/banner.svg) are original
+SVG assets; `docs/preview.html` is a local visual-review page.
+
+Built on the supported [OpenCode TUI plugin API](https://opencode.ai/docs/build/plugins/cli/)
+and [Codex TUI configuration](https://github.com/openai/codex/blob/main/codex-rs/config/src/types.rs).
+See [CHANGELOG.md](CHANGELOG.md) for releases. Claude Code support is not included.

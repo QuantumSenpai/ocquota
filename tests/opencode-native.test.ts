@@ -3,11 +3,12 @@ import { mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSyn
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { parseThemeDocument, resolveThemeDocument } from "@opencode/theme/tui";
+import { WORKSPACE_THEMES } from "../src/core/themes.ts";
 import { nativeThemes } from "../src/opencode/themes.ts";
 import { installOpenCode } from "../src/opencode/install.ts";
 
 test("all native themes resolve through OpenCode's own schema in both modes", () => {
-  expect(Object.keys(nativeThemes)).toEqual(["aurora", "ember", "mono"]);
+  expect(Object.keys(nativeThemes)).toEqual([...WORKSPACE_THEMES]);
   for (const [name, theme] of Object.entries(nativeThemes)) {
     parseThemeDocument(theme, name);
     for (const mode of ["dark", "light"] as const) {

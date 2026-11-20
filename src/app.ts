@@ -41,6 +41,8 @@ export interface RawOptions {
   n?: string | undefined;
   theme?: string | undefined;
   motion?: boolean | undefined;
+  animation?: string | undefined;
+  speed?: string | undefined;
 }
 
 export function buildApp(options: RawOptions, incremental = false): App {

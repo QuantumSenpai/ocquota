@@ -8,6 +8,7 @@ interface WatchLoopOptions {
   onClose: () => void;
   debug?: boolean | undefined;
   animate?: (() => string) | undefined;
+  onKey?: ((key: string) => void) | undefined;
 }
 
 export class WatchLoop {
@@ -17,6 +18,8 @@ export class WatchLoop {
   private animationTimer: ReturnType<typeof setInterval> | undefined;
   private healthy = false;
   private debugSuffix = "";
+  private restoreInput: (() => void) | undefined;
+  private readonly interrupt = () => this.stop();
 
   constructor(options: WatchLoopOptions) {
     this.options = options;
@@ -34,8 +37,25 @@ export class WatchLoop {
     }
     this.running = true;
     process.stdout.write("\x1B[?1049h\x1B[?25l");
-    process.on("SIGINT", () => this.stop());
-    process.on("SIGTERM", () => this.stop());
+    process.on("SIGINT", this.interrupt);
+    process.on("SIGTERM", this.interrupt);
+    if (this.options.onKey && process.stdin.isTTY && process.stdin.setRawMode) {
+      const wasRaw = process.stdin.isRaw;
+      const wasPaused = process.stdin.isPaused();
+      const input = (chunk: Buffer) => {
+        const key = chunk.toString();
+        if (key === "q" || key === "\x03") this.stop();
+        else this.options.onKey?.(key);
+      };
+      process.stdin.setRawMode(true);
+      process.stdin.on("data", input);
+      process.stdin.resume();
+      this.restoreInput = () => {
+        process.stdin.off("data", input);
+        process.stdin.setRawMode(wasRaw);
+        if (wasPaused) process.stdin.pause();
+      };
+    }
     this.tick();
     const animate = this.options.animate;
     if (animate) {
@@ -54,6 +74,9 @@ export class WatchLoop {
   stop(): void {
     if (!this.running) return;
     this.running = false;
+    process.off("SIGINT", this.interrupt);
+    process.off("SIGTERM", this.interrupt);
+    this.restoreInput?.();
     if (this.timer !== undefined) clearTimeout(this.timer);
     if (this.animationTimer !== undefined) clearInterval(this.animationTimer);
     process.stdout.write("\x1B[?25h\x1B[?1049l");
