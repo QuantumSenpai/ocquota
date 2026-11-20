@@ -1,5 +1,11 @@
 # Changelog
 
+## Unreleased
+
+- Add a standalone Windows x64 executable build with bundled Bun and native plugin files.
+- Fix native OpenCode installation from compiled executables.
+- Add Windows, macOS and Linux CI, including offline npm installation and standalone integration setup.
+
 ## 0.3.0 — 2026-11-20
 
 - Add `codex-install` for native Aurora, Ember and Mono themes and live Codex CLI footer stats.

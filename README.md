@@ -19,6 +19,35 @@ ocquota opencode-install --theme aurora
 opencode
 ```
 
+### Windows
+
+Use Windows 10 (1809+) or Windows 11 with PowerShell / Windows Terminal.
+For the npm package, install Bun 1.4.4+ first (`npm install -g bun`), then:
+
+```powershell
+npm install -g @kyzenn.raw/ocquota@latest
+ocquota preview --source codex --theme ember
+ocquota codex-install --theme aurora
+# Or, for OpenCode:
+ocquota opencode-install --theme aurora
+```
+
+A standalone Windows x64 build is also available from the Compatibility
+workflow's `ocquota-windows-x64` artifact. Extract the entire ZIP to one folder
+and run `./ocquota.exe`; it includes Bun, so no runtime installation is needed.
+Keep `tui.tsx` and `tui-runtime.js` beside the executable for OpenCode setup.
+
+```powershell
+.\ocquota.exe codex-install --theme aurora
+.\ocquota.exe watch --source codex --theme aurora
+```
+
+Native Windows reads `%USERPROFILE%\.codex` for Codex and
+`%USERPROFILE%\.local\share\opencode\opencode.db` for OpenCode.
+Use `--codex-home "C:\path with spaces\.codex"` or `--db "C:\path\opencode.db"`
+for custom locations. WSL keeps its own sessions; run ocquota inside WSL to
+read those. Build the ZIP contents locally with `bun run build:windows`.
+
 Inside OpenCode, use `/ocquota` for statistics and `/themes` to switch themes.
 For Codex CLI native themes and live footer stats, see the Codex setup below.
 The standalone usage view is `ocquota watch --source codex --theme aurora`.

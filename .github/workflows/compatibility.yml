@@ -1,0 +1,41 @@
+name: Compatibility
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  test:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [windows-latest, macos-latest, ubuntu-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: 1.4.4
+      - run: bun install --frozen-lockfile
+      - run: bun run typecheck
+      - run: bun run build
+      - run: bun test
+      - if: runner.os == 'Windows'
+        run: bun run build:windows
+      - if: runner.os == 'Windows'
+        name: Verify Windows distribution
+        shell: pwsh
+        run: |
+          $env:OCQUOTA_TEST_EXE = (Resolve-Path dist/windows-x64/ocquota.exe).Path
+          bun test tests/standalone.test.ts
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          Compress-Archive -Path dist/windows-x64/* -DestinationPath dist/ocquota-windows-x64.zip
+      - if: runner.os == 'Windows'
+        uses: actions/upload-artifact@v4
+        with:
+          name: ocquota-windows-x64
+          path: dist/ocquota-windows-x64.zip

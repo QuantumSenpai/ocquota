@@ -29,7 +29,7 @@ export function installOpenCode(options: InstallOptions): { configPath: string; 
     } catch (cause) { throw new ConfigError(`Cannot parse ${configPath}; existing config was left unchanged.`, { cause }); }
   }
   if (config["plugins"] !== undefined && !Array.isArray(config["plugins"])) throw new ConfigError(`Invalid plugins list in ${configPath}.`);
-  const executableDir = options.pluginPath ? "" : dirname(realpathSync(process.argv[1] || ""));
+  const executableDir = options.pluginPath ? "" : dirname(realpathSync(Bun.isStandaloneExecutable ? process.execPath : process.argv[1] || ""));
   const sibling = resolve(executableDir, "tui.tsx");
   const source = options.pluginPath ?? (existsSync(sibling) ? sibling : resolve(executableDir, "../dist/tui.tsx"));
   if (!existsSync(source)) throw new ConfigError("Native plugin build is missing. Run bun run build before installing the integration.");

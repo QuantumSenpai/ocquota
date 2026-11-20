@@ -155,7 +155,7 @@ describe("themes", () => {
       const source = `
         process.stdout.isTTY = true;
         process.argv = ['bun', 'src/cli.ts', 'watch', '--db', process.env.OCQUOTA_TEST_DB, '--theme', 'ember', '--no-motion'];
-        setTimeout(() => process.kill(process.pid, 'SIGINT'), 300);
+        setTimeout(() => process.emit('SIGINT'), 300);
         await import('./src/cli.ts');
       `;
       const result = Bun.spawnSync(["bun", "-e", source], {

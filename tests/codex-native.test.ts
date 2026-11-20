@@ -30,7 +30,7 @@ test("Codex installation preserves settings, backs up TOML and installs native t
     }
     const backup = readdirSync(home).find((file) => file.endsWith(".bak"))!;
     expect(readFileSync(join(home, backup), "utf8")).toBe(original);
-    expect(statSync(join(home, backup)).mode & 0o777).toBe(0o600);
+    if (process.platform !== "win32") expect(statSync(join(home, backup)).mode & 0o777).toBe(0o600);
     installCodex({ codexHome: home, theme: "ember", motion: false });
     const updated = Bun.TOML.parse(readFileSync(path, "utf8")) as any;
     expect(updated.tui.theme).toBe("ocquota-ember");
@@ -61,6 +61,6 @@ test("Codex installer supports symlinked configuration without replacing the sym
     symlinkSync(target, join(home, "config.toml"));
     installCodex({ codexHome: home, theme: "mono" });
     expect((Bun.TOML.parse(readFileSync(target, "utf8")) as any).tui.theme).toBe("ocquota-mono");
-    expect(statSync(target).mode & 0o777).toBe(0o600);
+    if (process.platform !== "win32") expect(statSync(target).mode & 0o777).toBe(0o600);
   } finally { rmSync(home, { recursive: true, force: true }); }
 });

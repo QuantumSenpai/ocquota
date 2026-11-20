@@ -2,6 +2,7 @@ import { expect, test } from "bun:test";
 import { mkdtempSync, readFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
+import { pathToFileURL } from "node:url";
 import pkg from "../package.json";
 
 test("release tarball installs offline, runs independently, and sets up the native plugin", async () => {
@@ -32,7 +33,7 @@ test("release tarball installs offline, runs independently, and sets up the nati
     expect(JSON.parse(readFileSync(join(configDir, "cli.json"), "utf8")).theme.name).toBe("ocquota-ember");
     const native = join(configDir, "ocquota-native");
     expect(readFileSync(join(native, "tui.tsx"), "utf8")).toContain('from "./tui-runtime.js"');
-    const runtime = await import(join(native, "tui-runtime.js"));
+    const runtime = await import(pathToFileURL(join(native, "tui-runtime.js")).href);
     expect(typeof runtime.openNativeUsage).toBe("function");
     const codexHome = join(temp, "codex-settings");
     expect(run([command, "codex-install", "--theme", "mono", "--codex-home", codexHome], temp)).toContain("Native Codex themes and status-line stats installed");
