@@ -99,3 +99,35 @@ test("native scene defaults follow the chosen theme and preserve explicit overri
     }
   } finally { fixture.close(); }
 });
+
+test("upgrading a legacy TUI install preserves server settings and migrates custom options exactly once", () => {
+  const dir = mkdtempSync(join(tmpdir(), "ocquota-migrate-"));
+  try {
+    const plugin = join(dir, "plugin.tsx"); writeFileSync(plugin, "export default {};");
+    for (const file of ["server.js", "rpc.js"]) writeFileSync(join(dir, file), "export default {};");
+    const native = join(dir, "ocquota-native");
+    writeFileSync(join(dir, "cli.json"), JSON.stringify({ theme: { mode: "dark" }, plugins: ["other-tui", { package: native, options: { limitTokens: 1234 } }] }));
+    writeFileSync(join(dir, "opencode.json"), JSON.stringify({ mcp: { existing: { type: "local", command: ["example"] } }, plugins: ["other-server"] }));
+    installOpenCode({ configDir: dir, pluginPath: plugin, theme: "sakura", linkCodexAccount: true });
+    const cli = JSON.parse(readFileSync(join(dir, "cli.json"), "utf8"));
+    const server = JSON.parse(readFileSync(join(dir, "opencode.json"), "utf8"));
+    expect(cli.plugins).toEqual(["other-tui"]); expect(cli.theme.mode).toBe("dark");
+    expect(server.mcp.existing.command).toEqual(["example"]);
+    expect(server.plugins[0]).toBe("other-server");
+    expect(server.plugins[1].options).toMatchObject({ limitTokens: 1234, linkCodexAccount: true });
+    installOpenCode({ configDir: dir, pluginPath: plugin, theme: "forest" });
+    expect(JSON.parse(readFileSync(join(dir, "opencode.json"), "utf8")).plugins).toHaveLength(2);
+  } finally { rmSync(dir, { recursive: true, force: true }); }
+});
+
+test("invalid server config leaves the existing TUI config and plugin files untouched", () => {
+  const dir = mkdtempSync(join(tmpdir(), "ocquota-migrate-invalid-"));
+  try {
+    const original = '{"theme":{"name":"keep-me"}}';
+    writeFileSync(join(dir, "cli.json"), original);
+    writeFileSync(join(dir, "opencode.json"), "not json");
+    expect(() => installOpenCode({ configDir: dir, theme: "sakura" })).toThrow(/opencode.json/);
+    expect(readFileSync(join(dir, "cli.json"), "utf8")).toBe(original);
+    expect(readdirSync(dir).sort()).toEqual(["cli.json", "opencode.json"]);
+  } finally { rmSync(dir, { recursive: true, force: true }); }
+});

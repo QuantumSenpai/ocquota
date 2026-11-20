@@ -27,6 +27,7 @@ thirteen themes, ten motion scenes, packaging and Windows compatibility.
 | Explicit same-account Codex link through that real OpenCode host | Passed: real shared-plan windows, with linked source and unavailable app-specific cap labeled |
 | Existing OpenRouter connection, quota-only endpoint | Passed: API returned a valid quota metric |
 | Groq/NVIDIA live remaining counters | No observed model response in the isolated read-only check; correctly unavailable |
+| Real Codex companion with existing OAuth and local logs | Passed: live Plus allowance and actual local counters, no artificial target shown |
 | Interactive 80×24 watch | Scene switch, speed, pause, quit, token details and terminal restoration passed |
 | SVG artwork | Static banner/logo rendered and inspected; live browser animation preview unavailable |
 
@@ -36,7 +37,7 @@ Same-account linking is explicit user confirmation, not automatic identity match
 
 ## Automated coverage
 
-**Local result:** type checking passed; 102 tests passed, zero failed (18 files).
+**Local result:** type checking passed; 104 tests passed, zero failed (18 files).
 
 The suite covers:
 
