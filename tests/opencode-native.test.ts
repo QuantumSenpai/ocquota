@@ -84,3 +84,15 @@ test("installer refuses malformed config without overwriting it", () => {
     expect(readFileSync(path, "utf8")).toBe("invalid config");
   } finally { rmSync(dir, { recursive: true, force: true }); }
 });
+
+test("native scene defaults follow the chosen theme and preserve explicit overrides", async () => {
+  const { openNativeUsage } = await import("../src/opencode/controller.ts");
+  const { Fixture } = await import("./helpers/fixture-db.ts");
+  const fixture = new Fixture();
+  try {
+    for (const [options, expected] of [[{ theme: "forest" }, "leaves"], [{ theme: "ocean" }, "waves"], [{ theme: "forest", animation: "rain" }, "rain"]] as const) {
+      const usage = openNativeUsage({ dbPath: fixture.path, ...options });
+      try { expect(usage.scene.animation).toBe(expected); } finally { usage.close(); }
+    }
+  } finally { fixture.close(); }
+});

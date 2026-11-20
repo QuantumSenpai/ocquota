@@ -1,4 +1,4 @@
-import { motionOptions } from "../render/motion.ts";
+import { motionOptions, MOTION_STYLES } from "../render/motion.ts";
 import { WORKSPACE_THEMES, palettes } from "../core/themes.ts";
 import { z } from "zod";
 import { ConfigStore } from "../config/config-store.ts";
@@ -20,7 +20,7 @@ const schema = z.object({
   refreshMs: z.number().int().min(1000).optional(),
   motion: z.boolean().optional(),
   theme: z.enum(WORKSPACE_THEMES).default("aurora"),
-  animation: motionOptions.shape.animation.optional(),
+  animation: z.enum(MOTION_STYLES).optional(),
   speed: motionOptions.shape.speed.optional(),
 });
 
