@@ -7,3 +7,7 @@ User scope: publish/push a polished release with ten additional themes, ten cont
 - Integrations: OpenCode sidebar/footer and commands; Codex supported native themes/footer plus a separate animated companion pane. No unsupported Codex overlay injection.
 - Branding: original SVG logo and animated banner; stable sample stats, reduced-motion CSS and visual review. Rewrite README around exact capabilities and install/update paths.
 - Release: typecheck, full tests, package smoke, Windows standalone build, review, push, three-platform CI, npm 0.4.0/latest, GitHub release with Windows ZIP; verify registry version and package hash.
+
+## Account-aware scope added from user screenshots
+
+Replace the primary local-budget presentation with a compact selected-provider/model account view. Read only actual provider allowance; keep tokens, requests, dollars and context limits distinct. Add server RPC and header observation without triggering inference, isolate account/model caches, and support a Codex companion panel. Preserve settings during server/TUI migration. Verify live OpenAI OAuth, actual OpenCode host loading, mocked edge/security cases and all supported CI platforms; document unavailable provider data and known advisory findings in the final report.

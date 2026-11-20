@@ -14,8 +14,8 @@
   "bin": {
     "ocquota": "dist/cli.js"
   },
-  "files": ["dist/cli.js", "dist/tui.tsx", "dist/tui-runtime.js", "dist/licenses.txt", "CHANGELOG.md"],
-  "exports": { "./tui": "./dist/tui.tsx" },
+  "files": ["dist/cli.js", "dist/tui.tsx", "dist/tui-runtime.js", "dist/server.js", "dist/rpc.js", "dist/licenses.txt", "CHANGELOG.md"],
+  "exports": { ".": "./dist/server.js", "./tui": "./dist/tui.tsx", "./rpc": "./dist/rpc.js" },
   "type": "module",
   "engines": {
     "bun": ">=1.4.4"

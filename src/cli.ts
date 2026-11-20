@@ -17,6 +17,14 @@ import { ProgressBar } from "./render/progress-bar.ts";
 import { installOpenCode } from "./opencode/install.ts";
 import { WORKSPACE_THEMES, palettes } from "./core/themes.ts";
 import { motionOptions, renderMotion, MotionControls } from "./render/motion.ts";
+import { fetchAccount } from "./account/providers.ts";
+import { codexCredential } from "./account/codex.ts";
+import { type AccountSnapshot } from "./account/types.ts";
+import { AccountCache } from "./account/cache.ts";
+import { PanelRenderer } from "./render/panel-renderer.ts";
+import { CodexUsageRepository } from "./data/codex-usage-repository.ts";
+import { createHash } from "node:crypto";
+import { openCompanion } from "./render/companion.ts";
 import { installCodex } from "./codex/install.ts";
 
 function isWorkspaceTheme(name: string): name is (typeof WORKSPACE_THEMES)[number] { return (WORKSPACE_THEMES as readonly string[]).includes(name); }
@@ -64,6 +72,7 @@ function main(): void {
   cli.option("--days <n>", "daily: how many local days to show (default 7)");
   cli.option("--n <rows>", "top: how many sessions to show (default 5)");
   cli.option("--theme <name>", "Workspace theme (run ocquota themes; default aurora)");
+  cli.option("--link-codex-account", "Use your explicitly linked same-account Codex login for shared OpenAI allowance");
   cli.option("--animation <name>", "Scene: sakura | rain | leaves | wind | snow | fireflies | stars | bubbles | embers | waves");
   cli.option("--speed <number>", "Animation speed, 0.25 to 3 (default 1)");
   cli.option("--no-motion", "Disable watch-mode animation");
@@ -71,7 +80,7 @@ function main(): void {
   cli.command("opencode-install", "Install native themes and quota stats inside OpenCode 2.3+").action((options: RawOptions) => {
     const theme = options.theme ?? "aurora";
     if (!isWorkspaceTheme(theme)) throw new ConfigError("Unknown workspace theme. Run ocquota themes.");
-    const result = installOpenCode({ theme, ...sceneOptions(options, theme), ...(options.motion === false ? { motion: false } : {}) });
+    const result = installOpenCode({ theme, ...sceneOptions(options, theme), ...(options.linkCodexAccount === undefined ? {} : { linkCodexAccount: options.linkCodexAccount }), ...(options.codexHome ? { codexHome: options.codexHome } : {}), ...(options.motion === false ? { motion: false } : {}) });
     writeLine(`Native OpenCode integration installed.\nConfig: ${result.configPath}\nRestart OpenCode, then use /ocquota or /themes.\nPrevious settings were backed up alongside cli.json.`);
   });
 
@@ -102,6 +111,46 @@ function main(): void {
 
   cli.command("", "Show the quota bar (default)").action(withApp((app) => writeLine(fullRenderer(app).render(app.service.snapshot()))));
   cli.command("bar", "Show the quota bar (alias of the default command)").action(withApp((app) => writeLine(fullRenderer(app).render(app.service.snapshot()))));
+
+  cli.command("pane", "Open a right-side Codex companion in Windows Terminal or tmux").action((options: RawOptions) => {
+    const theme = options.theme ?? "sakura";
+    if (!isWorkspaceTheme(theme)) throw new ConfigError("Choose a workspace theme for the companion pane.");
+    const scene = sceneOptions(options, theme);
+    writeLine(openCompanion(["panel", "--source", "codex", "--theme", theme, "--animation", scene.animation, "--speed", String(scene.speed),
+      ...(options.codexHome ? ["--codex-home", options.codexHome] : []), ...(options.motion === false ? ["--no-motion"] : [])]));
+  });
+  cli.command("panel", "Compact account allowance and local usage for a Codex companion pane").action((options: RawOptions) => {
+    if (options.source && options.source !== "codex") throw new ConfigError("Use OpenCode's native sidebar for provider-aware account statistics. This companion follows Codex.");
+    const theme = options.theme ?? "sakura";
+    if (!isWorkspaceTheme(theme)) throw new ConfigError("Choose a workspace theme for the companion panel.");
+    const scene = sceneOptions(options, theme);
+    const app = buildApp({ ...options, source: "codex", metric: "tokens", theme });
+    const cache = new AccountCache();
+    const shutdown = new AbortController();
+    let account: AccountSnapshot | undefined;
+    let currentKey = "";
+    let generation = 0;
+    const updateAccount = () => {
+      const credential = codexCredential(app.config.codexHome);
+      const key = createHash("sha256").update(credential?.type === "oauth" ? `${credential.accountId ?? ""}:${credential.access}` : "missing").digest("hex");
+      if (key !== currentKey) { currentKey = key; generation++; account = undefined; cache.clear(); }
+      const request = generation;
+      return cache.read(key, () => fetchAccount("openai", credential, fetch, shutdown.signal)).then((result) => { if (!shutdown.signal.aborted && request === generation) account = result; });
+    };
+    const initialAccount = updateAccount();
+    const accountTimer = setInterval(updateAccount, 30000);
+    const controls = new MotionControls(scene.animation, scene.speed);
+    const motion = Boolean(process.stdout.isTTY && options.motion !== false && process.env["OCQUOTA_REDUCED_MOTION"] !== "1" && process.env["TERM"] !== "dumb");
+    const renderer = new PanelRenderer({ theme, color: COLORS.isColorSupported, account: () => account,
+      model: () => app.repository instanceof CodexUsageRepository ? app.repository.latestModel() : undefined, controls, motion });
+    let snapshot: QuotaSnapshot;
+    const loop = new WatchLoop({ render: () => { snapshot = app.service.snapshot(); return renderer.render(snapshot); },
+      ...(motion ? { animate: () => renderer.render(snapshot) } : {}), onKey: (key) => { controls.handle(key); }, refreshMs: app.config.refreshMs,
+      colors: COLORS, onClose: () => { shutdown.abort(); clearInterval(accountTimer); cache.clear(); app.close(); },
+    });
+    if (process.stdout.isTTY && process.env["TERM"] !== "dumb") loop.start();
+    else void initialAccount.then(() => loop.start()).catch(() => { shutdown.abort(); clearInterval(accountTimer); app.close(); process.stderr.write("ocquota: Could not render the local account panel.\n"); process.exitCode = 1; });
+  });
 
   cli.command("watch", "Refresh the quota bar until Ctrl-C").action((options: RawOptions) => {
     const scene = sceneOptions(options, options.theme ?? process.env["OCQUOTA_THEME"] ?? "aurora");

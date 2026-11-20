@@ -19,7 +19,7 @@ test("release tarball installs offline, runs independently, and sets up the nati
     const packed = JSON.parse(run(["npm", "pack", "--dry-run=false", "--ignore-scripts", "--json", "--pack-destination", temp, "--cache", join(temp, "cache")])) as Array<{ filename: string; files: Array<{ path: string }> }>;
     const archive = packed[0]!;
     expect(archive.files.map((file) => file.path).sort()).toEqual([
-      "CHANGELOG.md", "LICENSE", "README.md", "dist/cli.js", "dist/licenses.txt", "dist/tui-runtime.js", "dist/tui.tsx", "package.json",
+      "CHANGELOG.md", "LICENSE", "README.md", "dist/cli.js", "dist/licenses.txt", "dist/rpc.js", "dist/server.js", "dist/tui-runtime.js", "dist/tui.tsx", "package.json",
     ]);
     const prefix = join(temp, "installed");
     run(["npm", "install", "--global", "--prefix", prefix, "--dry-run=false", "--ignore-scripts", "--offline", "--no-audit", "--no-fund", "--cache", join(temp, "cache"), join(temp, archive.filename)], temp);

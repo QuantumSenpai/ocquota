@@ -52,6 +52,8 @@ export class CodexSessionParser {
   private readonly responses = new Set<string>();
   private usesResponseRecords = false;
 
+  get selection(): { providerID: string; modelID: string } | undefined { return this.modelId === "unknown" ? undefined : { providerID: this.providerId, modelID: this.modelId }; }
+
   constructor(fallbackId: string) {
     this.sessionId = fallbackId;
   }

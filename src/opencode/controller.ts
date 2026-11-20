@@ -39,6 +39,6 @@ export function openNativeUsage(options: Readonly<Record<string, unknown>>) {
   const repository = new SqliteUsageRepository(db);
   const tracker = new IncrementalUsageTracker(repository, window);
   const service = new QuotaService(repository, window, { tokens: config.limitTokens, cost: config.limitCost }, config.metric, Date.now, tracker);
-  return { config, scene: motionOptions.parse({ animation: input.animation ?? palettes[input.theme].motion, speed: input.speed }), motion: input.motion !== false && process.env["OCQUOTA_REDUCED_MOTION"] !== "1",
+  return { config, budgetVisible: input.limitTokens !== undefined || input.limitCost !== undefined, models: () => repository.totalsByModelInRange(service.range()), scene: motionOptions.parse({ animation: input.animation ?? palettes[input.theme].motion, speed: input.speed }), motion: input.motion !== false && process.env["OCQUOTA_REDUCED_MOTION"] !== "1",
     refresh: () => service.snapshot(), close: () => db.close() };
 }

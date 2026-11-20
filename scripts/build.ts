@@ -20,7 +20,7 @@ const tui = await Bun.build({
 });
 if (!tui.success) throw new AggregateError(tui.logs, "OpenCode plugin build failed");
 // Let OpenCode transform TSX against its own Solid/OpenTUI runtime.
-const component = readFileSync(resolve(root, "src/opencode/tui.tsx"), "utf8").replace('"./runtime.ts"', '"./tui-runtime.js"');
+const component = readFileSync(resolve(root, "src/opencode/tui.tsx"), "utf8").replace('"./runtime.ts"', '"./tui-runtime.js"').replace('"./rpc.ts"', '"./rpc.js"');
 await Bun.write(resolve(root, "dist/tui.tsx"), component);
 
 const licenses = ["cac", "picocolors", "zod"].map((name) => {
@@ -28,3 +28,8 @@ const licenses = ["cac", "picocolors", "zod"].map((name) => {
   return `${name}\n${"=".repeat(name.length)}\n${text}`;
 });
 await Bun.write(resolve(root, "dist/licenses.txt"), licenses.join("\n\n"));
+
+for (const name of ["server", "rpc"]) {
+  const result = await Bun.build({ entrypoints: [resolve(root, `src/opencode/${name}.ts`)], outdir: resolve(root, "dist"), target: "bun", minify: true, external: ["@opencode/plugin"] });
+  if (!result.success) throw new AggregateError(result.logs, `${name} build failed`);
+}

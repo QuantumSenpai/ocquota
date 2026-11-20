@@ -2,6 +2,11 @@
 
 ## 0.4.0 — 2026-11-20
 
+- Prioritize provider-reported account allowance over optional local targets in a cleaner model-aware OpenCode sidebar.
+- Add authenticated OpenAI/OpenRouter quota readers, actual Groq/NVIDIA response-header observation and OpenCode Console usage projection, without inferred free token totals.
+- Add a compact Codex account companion panel and right-pane launch helpers for Windows Terminal and tmux.
+- Migrate native installs to the supported server/RPC/TUI package layout, preserve both configurations and mark unavailable/stale counters honestly.
+
 - Add ten workspace themes: Sakura, Forest, Ocean, Midnight, Matcha, Lavender, Rose, Sand, Glacier and Neon, alongside Aurora, Ember and Mono.
 - Add ten bounded ambient motion scenes with live pause, style and speed controls in OpenCode and the standalone watch view.
 - Show input/output, reasoning and cache statistics directly in the OpenCode sidebar; install all thirteen themes for Codex with live native footer statistics.

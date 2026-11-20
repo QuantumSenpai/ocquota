@@ -16,7 +16,7 @@ test("standalone binary runs outside the checkout and installs both integrations
     if (!process.env["OCQUOTA_TEST_EXE"]) {
       const build = Bun.spawnSync(["bun", "build", "--compile", "--minify", "src/cli.ts", "--outfile", command]);
       expect(build.exitCode).toBe(0);
-      for (const file of ["tui.tsx", "tui-runtime.js"]) copyFileSync(resolve("dist", file), join(dir, file));
+      for (const file of ["tui.tsx", "tui-runtime.js", "server.js", "rpc.js"]) copyFileSync(resolve("dist", file), join(dir, file));
     }
     expect(run(["--version"])).toContain(`ocquota/${pkg.version}`);
     expect(run(["preview", "--source", "codex", "--theme", "ember"])).toContain("Codex");
@@ -25,6 +25,6 @@ test("standalone binary runs outside the checkout and installs both integrations
     expect(Bun.TOML.parse(readFileSync(join(codexHome, "config.toml"), "utf8"))).toMatchObject({ tui: { theme: "ocquota-mono" } });
     const configDir = join(dir, "OpenCode config", "opencode");
     expect(run(["opencode-install", "--theme", "aurora"])).toContain("installed");
-    expect(JSON.parse(readFileSync(join(configDir, "cli.json"), "utf8")).plugins[0].package).toBe(join(configDir, "ocquota-native"));
+    expect(JSON.parse(readFileSync(join(configDir, "opencode.json"), "utf8")).plugins[0].package).toBe(join(configDir, "ocquota-native"));
   } finally { rmSync(dir, { recursive: true, force: true }); }
 }, 60_000);

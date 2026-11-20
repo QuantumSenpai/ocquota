@@ -46,6 +46,13 @@ export class CodexUsageRepository implements UsageRepository {
     }
   }
 
+  latestModel(): string | undefined {
+    let newest = -Infinity;
+    let model: string | undefined;
+    for (const file of this.files.values()) if (file.mtimeMs > newest && file.parser.selection) { newest = file.mtimeMs; model = file.parser.selection.modelID; }
+    return model;
+  }
+
   usageInRange(range: WindowRange): UsageTotals { return sum(this.rows(range)); }
   totalsSince(from: number): Totals { return { ...this.usageInRange({ start: from, end: Infinity }), from }; }
   totalsByModel(from: number): ModelTotals[] { return this.totalsByModelInRange({ start: from, end: Infinity }); }

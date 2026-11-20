@@ -11,7 +11,7 @@
 
 # ocquota
 
-Local, read-only usage statistics with calm workspace themes and a little atmosphere.
+Real provider allowance alongside local, read-only usage statistics, calm themes and a little atmosphere.
 Cherry blossoms, rain, drifting leaves and seven more ambient scenes live in their
 own small strip, leaving your code and statistics easy to read.
 
@@ -42,16 +42,20 @@ ocquota opencode-install --theme sakura --animation sakura --speed 0.75
 opencode
 ```
 
-Restart OpenCode after installing. The native sidebar shows your local budget,
-remaining tokens or cost, total tokens, input/output tokens, reasoning tokens,
-cache reads/writes, sessions, messages, reset time, burn rate, projection and
-current-session cost. A compact footer keeps your quota visible while you code.
+Restart OpenCode after installing. The clean sidebar follows the selected model/provider.
+Account allowance appears first, with its source, unit, reset and freshness.
+Recorded local usage appears separately. No fixed token capacity is invented for
+ChatGPT Plus or free models. Detailed input/output, reasoning, cache and recorded
+cost statistics expand with `/ocquota-details`. The footer labels local counts.
+A local target appears only when explicitly supplied in the plugin options;
+it is never presented as a provider allowance.
 
 Inside OpenCode:
 
 | Command | What it does |
 | --- | --- |
 | `/ocquota` | Usage and local-budget details |
+| `/ocquota-details` | Expand/collapse detailed local token and recorded-cost rows |
 | `/themes` | Switch the workspace to any `ocquota-*` theme |
 | `/motion` | Pause or resume the ambient strip |
 | `/motion-next` | Cycle through the ten scenes |
@@ -59,7 +63,7 @@ Inside OpenCode:
 | `/motion-slower` | Decrease speed, down to 0.25× |
 
 Live controls apply to the current OpenCode session. To persist your choice,
-rerun the installer with `--animation` and `--speed`, or edit the plugin options:
+rerun the installer with `--animation` and `--speed`, or edit the plugin options in `opencode.json(c)`:
 
 ```json
 {
@@ -70,7 +74,6 @@ rerun the installer with `--animation` and `--speed`, or edit the plugin options
       "animation": "sakura",
       "speed": 0.75,
       "motion": true,
-      "limitTokens": 5000000,
       "window": "day",
       "refreshMs": 2000
     }
@@ -81,9 +84,12 @@ rerun the installer with `--animation` and `--speed`, or edit the plugin options
 The installer copies the plugin locally and installs theme files into
 `~/.config/opencode/themes`. If `XDG_CONFIG_HOME` is set, it uses that directory
 instead. Preserve the installer's local `package` path when editing its options.
+The server part captures quota headers and projects account counters over typed
+RPC; the TUI receives sanitized counters, not credentials. The installer migrates
+its older TUI-only entry out of `cli.json(c)` so it loads once through
+`opencode.json(c)`. Theme selection stays in `cli.json(c)`.
 For themes, run the installer even if you load the plugin directly from npm.
-Existing settings and plugins are preserved; config backups sit beside `cli.json`
-or `cli.jsonc`. JSONC comments survive in the verbatim backup; the updated file
+Existing settings and plugins are preserved; config backups sit beside both `opencode.json(c)` and `cli.json(c)`. JSONC comments survive in the verbatim backup; the updated file
 is formatted JSON. Existing global `animations: false` is respected.
 
 ## Codex: native themes and footer stats
@@ -116,6 +122,64 @@ reject `--metric cost`. Local budgets are separate from provider account limits.
 Codex setup respects `--codex-home`, `OCQUOTA_CODEX_HOME`, then `CODEX_HOME`,
 then `~/.codex`. Existing TOML settings are preserved, with a private config
 backup before changes. `--no-motion` disables Codex's native animations.
+
+## Real account allowance: source and scope
+
+| Connection | What can be shown accurately | What is not assumed |
+| --- | --- | --- |
+| OpenAI / ChatGPT OAuth | Account-reported plan, usage percentages, reset windows and named additional pools | A Plus subscription is not a fixed token package; API keys are not Plus logins |
+| OpenRouter | API-reported free-model daily request counters and effective/key spending cap, when returned | Credit caps are not token totals or necessarily your account balance |
+| Groq | Actual inference response headers: requests/day and tokens/minute, scoped to the observed model/account | Public tier tables are not your exact current account allowance |
+| NVIDIA NIM | Actual remaining quota headers, when the response exposes them | No guessed 40 RPM cap, fixed free tokens or unlimited usage |
+| OpenCode Console | The host's `experimental.usage.limits` subscription/budget counters, when available | Free-model capacity/reset is not invented when the Console API omits it |
+| Other providers / Orca Router | Local recorded usage, with quota explicitly unavailable | No unverified service endpoints or fabricated allowance |
+
+Groq/NVIDIA counters appear after a real model response supplies headers. Capturing
+headers does not consume the response body or send a test model request. Switching
+accounts/models isolates their observations. Old observations are marked stale;
+failed checks never become a false zero or a fresh unlimited allowance.
+
+`opencode-install` uses the active saved OpenCode connection; it does not silently
+substitute your Codex account. Token-sharing logins can deny the OpenAI usage
+endpoint; the panel reports that limitation rather than estimating your plan.
+If OpenCode uses token-sharing and its token cannot read allowance, you can
+explicitly link an existing **same ChatGPT account** Codex login:
+
+```sh
+ocquota opencode-install --theme sakura --animation sakura --speed 0.75 --link-codex-account
+```
+
+The panel labels this **Shared plan via linked Codex** and explicitly says the
+OpenCode app-specific cap is not exposed. This does not create a second allowance
+or prove that the two logins are the same account; enable it only after confirming
+that yourself. The server part reads `auth.json` on the OpenCode server machine;
+for remote hosts, your local Codex login is not silently transferred.
+
+The server uses fixed HTTPS quota endpoints with timeouts and redirects disabled.
+Only sanitized counters are cached in memory. No credentials or prompts are logged,
+written to quota cache files or included in reports.
+
+## Codex right-side companion pane
+
+```sh
+ocquota pane --theme sakura --animation sakura --speed 0.75
+```
+
+In Windows Terminal this opens a right-hand split. On macOS/Linux inside tmux,
+it opens a right-hand split with a 42-column panel. Other terminals, including
+VS Code, can be split vertically with their own UI; run this on the right:
+
+```sh
+ocquota panel --source codex --theme sakura --animation sakura --speed 0.75
+```
+
+The compact panel reads real allowance from the existing Codex OAuth login and
+shows local tokens separately. The model label comes from the latest recorded
+session log; without a Codex UI extension API it cannot observe an unsubmitted
+model-picker change. With multiple Codex sessions, it follows the latest modified
+record, not a guaranteed binding to one terminal. The read-only companion does
+not refresh or replace Codex's credentials. Keychain-only/API-key logins without
+a usable `auth.json` OAuth token show allowance unavailable.
 
 ## Pick a theme
 
@@ -232,7 +296,7 @@ Config lives at `~/.config/ocquota/config.json`. Precedence is CLI → environme
 Day/week/month windows follow your selected timezone, including DST. Cached reads
 are excluded from the token budget. Session logs are deduplicated; file changes
 are incrementally parsed. OpenCode access is read-only and native plugin reads
-fail quickly on busy databases. No telemetry, network reporting or credential access.
+fail quickly on busy databases. No telemetry or external reporting. Account panels make authenticated read-only quota requests to the corresponding provider; local reports remain offline.
 
 ## Build and verify
 
@@ -254,11 +318,12 @@ npm pack
 npm install -g ./kyzenn.raw-ocquota-0.4.0.tgz
 ```
 
-The npm package includes the bundled CLI, native TUI source/runtime and licenses.
+The npm package includes the bundled CLI, native server/RPC/TUI parts and licenses.
 `npm publish` runs type checking and tests first. Publishing requires npm login.
 The [logo](assets/logo.svg) and [animated banner](assets/banner.svg) are original
 SVG assets; `docs/preview.html` is a local visual-review page.
 
 Built on the supported [OpenCode TUI plugin API](https://opencode.ai/docs/build/plugins/cli/)
 and [Codex TUI configuration](https://github.com/openai/codex/blob/main/codex-rs/config/src/types.rs).
+Read the [verification report](docs/verification-report.md) for live checks, test coverage and limitations.
 See [CHANGELOG.md](CHANGELOG.md) for releases. Claude Code support is not included.

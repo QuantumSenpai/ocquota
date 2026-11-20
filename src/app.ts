@@ -41,6 +41,7 @@ export interface RawOptions {
   n?: string | undefined;
   theme?: string | undefined;
   motion?: boolean | undefined;
+  linkCodexAccount?: boolean | undefined;
   animation?: string | undefined;
   speed?: string | undefined;
 }

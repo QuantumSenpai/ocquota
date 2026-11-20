@@ -1,6 +1,6 @@
 import { expect, test } from "bun:test";
 import { createSignal } from "solid-js";
-import { testRender } from "@opentui/solid";
+import { testRender, type JSX } from "@opentui/solid";
 import { resolveThemeDocument } from "@opencode/theme/tui";
 import type { QuotaSnapshot } from "../src/core/types.ts";
 import nativePlugin, { NativeFooter, NativeSidebar } from "../src/opencode/tui.tsx";
@@ -13,12 +13,12 @@ test("native sidebar renders real OpenTUI elements and updates budget state", as
   const context = { theme: resolveThemeDocument(nativeThemes.aurora, "dark"), data: { session: { cost: () => 1.25 } } };
   const [snapshot, setSnapshot] = createSignal<QuotaSnapshot | undefined>(DEMO_SNAPSHOT);
   const [error, setError] = createSignal("");
-  const view = await testRender(() => <NativeSidebar context={context} snapshot={snapshot} error={error} motion={false} sessionID="test" />, { width: 40, height: 25 });
+  const view = await testRender(() => <NativeSidebar context={context} snapshot={snapshot} error={error} motion={false} budgetVisible={true} details={() => true} sessionID="test" />, { width: 40, height: 25 });
   try {
     await view.renderOnce();
     const frame = view.captureCharFrame();
     expect(frame).toContain("ocquota");
-    expect(frame).toContain("37.2%");
+    expect(frame).toContain("LOCAL");
     expect(frame).toContain("1.9M / 5M");
     expect(frame).toContain("This session $1.25");
     expect(frame).toContain("Reasoning 180K");
@@ -28,7 +28,7 @@ test("native sidebar renders real OpenTUI elements and updates budget state", as
     expect(view.captureCharFrame()).toContain("1M over budget");
     setError("database locked");
     await view.renderOnce();
-    expect(view.captureCharFrame()).toContain("Usage unavailable");
+    expect(view.captureCharFrame()).toContain("Local usage stale");
   } finally { await view.dispose(); }
 });
 
@@ -38,7 +38,7 @@ test("native footer remains compact and marks cached statistics stale on error",
   const view = await testRender(() => <NativeFooter context={context} snapshot={() => DEMO_SNAPSHOT} error={error} motion={false} />, { width: 42, height: 2 });
   try {
     await view.renderOnce();
-    expect(view.captureCharFrame()).toContain("37.2% · 1.9M tokens");
+    expect(view.captureCharFrame()).toContain("1.9M local tokens");
     setError("connection lost");
     await view.renderOnce();
     expect(view.captureCharFrame()).toContain("stale");
@@ -93,4 +93,31 @@ test("native ambient strip responds to live pause and scene changes", async () =
     await view.renderOnce();
     expect(view.captureCharFrame().trim()).toBe("");
   } finally { await view.dispose(); }
+});
+
+test("selected-model changes discard slow quota responses from the previous selection", async () => {
+  const fixture = new Fixture();
+  const [selection, setSelection] = createSignal({ providerID: "openai", modelID: "model-a" });
+  const pending = new Map<string, (value: unknown) => void>();
+  let sidebar!: (input: { sessionID: string }) => JSX.Element;
+  const context = {
+    options: { dbPath: fixture.path, motion: false }, theme: resolveThemeDocument(nativeThemes.sakura, "dark"),
+    data: { session: { cost: () => 0 }, location: { provider: { list: () => [] } }, on: () => () => {} },
+    client: { rpc: () => ({ read: (input: { modelID: string }) => new Promise((resolve) => pending.set(input.modelID, resolve)) }) },
+    keymap: { layer: () => {} },
+    ui: { model: { current: selection }, slot: (claim: { append: string; render: typeof sidebar }) => { if (claim.append === "sidebar.content") sidebar = claim.render; return () => {}; } },
+  } as unknown as Context;
+  const cleanup = await nativePlugin.setup(context);
+  const view = await testRender(() => sidebar({ sessionID: "s" }), { width: 42, height: 26 });
+  const quota = (remaining: number) => ({ provider: "openai", status: "live", source: "OpenAI", note: "account", fetchedAt: Date.now(), plan: "plus", meters: [{ label: "5h window", unit: "percent", scope: "account", remaining, limit: 100 }] });
+  try {
+    await view.renderOnce();
+    setSelection({ providerID: "openai", modelID: "model-b" });
+    await view.renderOnce();
+    pending.get("model-a")!(quota(99)); await Promise.resolve(); await view.renderOnce();
+    expect(view.captureCharFrame()).not.toContain("99% left");
+    pending.get("model-b")!(quota(10)); await Promise.resolve(); await view.renderOnce();
+    expect(view.captureCharFrame()).toContain("model-b"); expect(view.captureCharFrame()).toContain("10% left");
+    expect(view.captureCharFrame()).not.toContain("5M");
+  } finally { await view.dispose(); if (cleanup) await cleanup(); fixture.close(); }
 });

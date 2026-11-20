@@ -27,20 +27,22 @@ test("native installation preserves other plugins and settings, backs up config 
     const original = JSON.stringify({ theme: { name: "tokyonight", mode: "dark" }, animations: false, plugins: ["existing-plugin"] });
     writeFileSync(configPath, original);
     const plugin = join(dir, "tui.js"); writeFileSync(plugin, "export default { id: 'ocquota' }");
+    for (const file of ["server.js", "rpc.js"]) writeFileSync(join(dir, file), "export default {};");
     installOpenCode({ configDir, pluginPath: plugin, theme: "ember" });
     const config = JSON.parse(readFileSync(configPath, "utf8"));
     expect(config.animations).toBe(false);
     expect(config.theme).toEqual({ name: "ocquota-ember", mode: "dark" });
     expect(config.plugins[0]).toBe("existing-plugin");
-    expect(config.plugins[1].package).toContain("ocquota-native");
-    expect(config.plugins[1].options.motion).toBe(false);
+    const serverConfig = JSON.parse(readFileSync(join(configDir, "opencode.json"), "utf8"));
+    expect(serverConfig.plugins[0].package).toContain("ocquota-native");
+    expect(serverConfig.plugins[0].options.motion).toBe(false);
     const backup = readdirSync(configDir).find((name) => name.endsWith(".bak"))!;
     expect(readFileSync(join(configDir, backup), "utf8")).toBe(original);
-    config.plugins[1].options.limitTokens = 1000;
-    writeFileSync(configPath, JSON.stringify(config));
+    serverConfig.plugins[0].options.limitTokens = 1000;
+    writeFileSync(join(configDir, "opencode.json"), JSON.stringify(serverConfig));
     installOpenCode({ configDir, pluginPath: plugin, theme: "ember" });
-    expect(JSON.parse(readFileSync(configPath, "utf8")).plugins).toHaveLength(2);
-    expect(JSON.parse(readFileSync(configPath, "utf8")).plugins[1].options.limitTokens).toBe(1000);
+    expect(JSON.parse(readFileSync(join(configDir, "opencode.json"), "utf8")).plugins).toHaveLength(1);
+    expect(JSON.parse(readFileSync(join(configDir, "opencode.json"), "utf8")).plugins[0].options.limitTokens).toBe(1000);
     expect(readdirSync(join(configDir, "themes"))).toContain("ocquota-aurora.json");
   } finally { rmSync(dir, { recursive: true, force: true }); }
 });
@@ -51,6 +53,7 @@ test("JSONC installation keeps settings and a verbatim backup of comments", () =
     const original = '{\n// user settings\n"animations":false,\n}';
     writeFileSync(join(dir, "cli.jsonc"), original);
     const plugin = join(dir, "plugin.tsx"); writeFileSync(plugin, "export default {};");
+    for (const file of ["server.js", "rpc.js"]) writeFileSync(join(dir, file), "export default {};");
     installOpenCode({ configDir: dir, pluginPath: plugin, theme: "mono" });
     expect(JSON.parse(readFileSync(join(dir, "cli.jsonc"), "utf8")).animations).toBe(false);
     const backup = readdirSync(dir).find((file) => file.endsWith(".bak"))!;

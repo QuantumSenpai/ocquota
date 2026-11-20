@@ -1,7 +1,9 @@
 import { Plugin } from "@opencode/plugin/tui";
 import type { Context } from "@opencode/plugin/tui/context";
-import { createEffect, createMemo, createSignal, onCleanup, Show, untrack, type Accessor } from "solid-js";
-import { clamp, formatCompact, formatDuration, formatMoney, formatPercent, friendlyMessage, openNativeUsage, type QuotaSnapshot, renderMotion, MOTION_STYLES, type MotionStyle } from "./runtime.ts";
+import { createEffect, createMemo, createSignal, createRoot, For, onCleanup, Show, untrack, type Accessor } from "solid-js";
+import { clamp, formatCompact, formatDuration, formatMoney, friendlyMessage, openNativeUsage, type QuotaSnapshot, renderMotion, MOTION_STYLES, type MotionStyle, accountLines, parseConsoleUsage, unavailable, type AccountSnapshot, type ModelTotals, type QuotaMeter } from "./runtime.ts";
+
+import { accountRpc } from "./rpc.ts";
 
 interface ViewProps {
   context: Pick<Context, "theme"> & { data: { session: Pick<Context["data"]["session"], "cost"> } };
@@ -11,6 +13,11 @@ interface ViewProps {
   animation?: MotionStyle;
   speed?: number;
   limitConfigured?: boolean;
+  budgetVisible?: boolean;
+  account?: Accessor<AccountSnapshot | undefined>;
+  models?: Accessor<ModelTotals[]>;
+  selection?: Accessor<{ providerID: string; modelID: string } | undefined>;
+  details?: Accessor<boolean>;
 }
 
 function value(snapshot: QuotaSnapshot, amount: number): string {
@@ -79,37 +86,53 @@ export function NativeScene(props: ViewProps) {
 
 export function NativeSidebar(props: ViewProps & { sessionID?: string }) {
   const theme = () => props.context.theme;
+  const selected = createMemo(() => props.selection?.());
+  const modelUsage = createMemo(() => props.models?.().find((item) => item.providerId === selected()?.providerID && item.modelId === selected()?.modelID));
+  const lines = createMemo(() => accountLines(props.account?.(), props.snapshot()?.takenAt ?? Date.now(), props.details?.() ?? false));
   return <box flexDirection="column" gap={0} paddingTop={1}>
+    <text fg={theme().text.base}><strong>ocquota</strong><span style={{ fg: theme().text.muted }}> · live usage</span></text>
+    <Show when={selected()}>{(model: Accessor<{ providerID: string; modelID: string }>) => <>
+      <text fg={theme().hue.accent[300]}>{model().modelID}</text>
+      <text fg={theme().text.muted}>{model().providerID}</text>
+    </>}</Show>
     <NativeScene {...props} />
-    <text fg={theme().text.base}><strong>ocquota</strong><span style={{ fg: theme().text.muted }}> · local budget</span></text>
-    <Show when={props.snapshot()} fallback={<text fg={theme().text.muted}>Waiting for usage…</text>}>{(snapshot: Accessor<QuotaSnapshot>) => <>
-      <text fg={color(props)}><strong>{snapshot().limit > 0 ? formatPercent(snapshot().percent) : "—"}</strong><span style={{ fg: theme().text.muted }}> · {snapshot().windowKind} window</span></text>
-      <Meter {...props} />
-      <text fg={theme().text.base}>{value(snapshot(), snapshot().used)} / {(props.limitConfigured ?? snapshot().limit > 0) ? value(snapshot(), snapshot().limit) : "no limit"}</text>
-      <text fg={color(props)}>{status(snapshot(), props.limitConfigured)}</text>
-      <box flexDirection="column" paddingTop={1}>
-        <text fg={theme().text.muted}>Tokens <span style={{ fg: theme().text.base }}>{formatCompact(snapshot().totalTokens)}</span> · Cost <span style={{ fg: theme().text.base }}>{formatMoney(snapshot().cost)}</span></text>
+    <box paddingTop={1} flexDirection="column">
+      <For each={lines()}>{(line, index) => <text fg={index() === 0 ? theme().text.base : theme().text.muted}>{line}</text>}</For>
+    </box>
+    <Show when={props.snapshot()} fallback={<text fg={theme().text.muted}>Waiting for local usage…</text>}>{(snapshot: Accessor<QuotaSnapshot>) => <>
+      <box paddingTop={1} flexDirection="column">
+        <text fg={theme().text.base}><strong>LOCAL · {snapshot().windowKind}</strong></text>
+        <Show when={modelUsage()}>{(usage: Accessor<ModelTotals>) => <text fg={theme().hue.accent[300]}>This model {formatCompact(usage().totalTokens)} tokens</text>}</Show>
+        <text fg={theme().text.muted}>All models {formatCompact(snapshot().totalTokens)} tokens</text>
+        <text fg={theme().text.muted}>{snapshot().sessions} sessions · {snapshot().messages} messages</text>
+      </box>
+      <Show when={props.budgetVisible}><box paddingTop={1} flexDirection="column">
+        <text fg={theme().text.muted}>YOUR LOCAL TARGET · not account quota</text>
+        <Meter {...props} />
+        <text fg={color(props)}>{value(snapshot(), snapshot().used)} / {value(snapshot(), snapshot().limit)}</text>
+        <text fg={color(props)}>{status(snapshot(), props.limitConfigured)}</text>
+      </box></Show>
+      <Show when={props.details?.()}><box paddingTop={1} flexDirection="column">
         <text fg={theme().text.muted}>In {formatCompact(snapshot().tokens.input)} · Out {formatCompact(snapshot().tokens.output)}</text>
         <text fg={theme().text.muted}>Reasoning {formatCompact(snapshot().tokens.reasoning)}</text>
         <text fg={theme().text.muted}>Cache read {formatCompact(snapshot().tokens.cacheRead)} (excluded)</text>
         <text fg={theme().text.muted}>Cache write {formatCompact(snapshot().tokens.cacheWrite)}</text>
-        <text fg={theme().text.muted}>{snapshot().sessions} sessions · {snapshot().messages} messages</text>
-        <text fg={theme().text.muted}>Reset in {formatDuration(snapshot().resetAt - snapshot().takenAt)}</text>
-        <Show when={snapshot().burnRatePerHour > 0}><text fg={theme().text.muted}>{value(snapshot(), snapshot().burnRatePerHour)}/h · {snapshot().projection}</text></Show>
-      </box>
-      <Show when={props.sessionID}><box paddingTop={1} flexDirection="column">
-        <text fg={theme().text.muted}>This session <span style={{ fg: theme().text.base }}>{formatMoney(props.context.data.session.cost(props.sessionID!))}</span></text>
+        <text fg={theme().text.muted}>Recorded cost {formatMoney(snapshot().cost)}</text>
+        <Show when={props.sessionID}><text fg={theme().text.muted}>This session {formatMoney(props.context.data.session.cost(props.sessionID!))}</text></Show>
+        <text fg={theme().text.faint}>Recorded cost is not subscription billing.</text>
       </box></Show>
     </>}</Show>
-    <Show when={props.error()}><text fg={theme().text.feedback.warning.base}>Usage unavailable · /ocquota for details</text></Show>
-    <text fg={theme().text.faint}>/ocquota · /themes · /motion</text>
+    <Show when={props.error()}><text fg={theme().text.feedback.warning.base}>Local usage stale · /ocquota</text></Show>
+    <text fg={theme().text.faint}>/ocquota · /ocquota-details · /motion</text>
   </box>;
 }
 
 export function NativeFooter(props: ViewProps) {
-  return <Show when={props.snapshot()}>{(snapshot: Accessor<QuotaSnapshot>) => <text fg={color(props)}>
-    {" ◈ "}{snapshot().limit > 0 ? formatPercent(snapshot().percent) : "Quota"}{" · "}{formatCompact(snapshot().totalTokens)}{" tokens"}
-    <Show when={props.error()}><span style={{ fg: props.context.theme.text.feedback.warning.base }}> · stale</span></Show>
+  const primary = () => props.account?.()?.meters.find((meter) => meter.unit === "percent");
+  return <Show when={props.snapshot()}>{(snapshot: Accessor<QuotaSnapshot>) => <text fg={props.context.theme.hue.accent[300]}>
+    {" ◈ "}{formatCompact(snapshot().totalTokens)}{" local tokens"}
+    <Show when={primary()}>{(meter: Accessor<QuotaMeter>) => <span>{" · "}{meter().remaining}% account left</span>}</Show>
+    <Show when={props.error() || props.account?.()?.status === "stale"}><span style={{ fg: props.context.theme.text.feedback.warning.base }}> · stale</span></Show>
   </text>}</Show>;
 }
 
@@ -119,11 +142,14 @@ export default Plugin.define({
   setup(context) {
     const [snapshot, setSnapshot] = createSignal<QuotaSnapshot>();
     const [error, setError] = createSignal("");
+    const [account, setAccount] = createSignal<AccountSnapshot>();
+    const [models, setModels] = createSignal<ModelTotals[]>([]);
+    const [details, setDetails] = createSignal(false);
     let usage: ReturnType<typeof openNativeUsage> | undefined;
     const refresh = () => {
       try {
         usage ??= openNativeUsage(context.options);
-        setSnapshot(usage.refresh()); setError("");
+        setSnapshot(usage.refresh()); setModels(usage.models()); setError("");
       } catch (cause) { setError(friendlyMessage(cause)); }
     };
     refresh();
@@ -131,7 +157,36 @@ export default Plugin.define({
     const [animation, setAnimation] = createSignal<MotionStyle>(usage?.scene.animation ?? "sakura");
     const [speed, setSpeed] = createSignal(usage?.scene.speed ?? 1);
     const timer = setInterval(refresh, Math.max(1000, usage?.config.refreshMs ?? 2000));
-    const props: ViewProps = { context, snapshot, error,
+    const disposeAccounts = createRoot((dispose) => {
+      createEffect(() => {
+        const selected = context.ui.model?.current();
+        setAccount(undefined);
+        if (!selected) { setAccount(unavailable("none", "Select a model to inspect its provider allowance.")); return; }
+        let controller = new AbortController();
+        let active = true, generation = 0;
+        const update = async () => {
+          const request = ++generation;
+          controller.abort(); controller = new AbortController();
+          const signal = controller.signal;
+          try {
+            const provider = context.data.location?.provider.list(context.location)?.find((item) => item.id === selected.providerID);
+            const canonical = provider?.canonical ?? provider?.integrationID ?? selected.providerID;
+            const result = canonical.startsWith("opencode")
+              ? parseConsoleUsage((await context.client.experimental.usage.limits({}, { signal })).data, selected.providerID, selected.modelID)
+              : await context.client.rpc(accountRpc).read(selected, { signal });
+            if (active && request === generation) setAccount(result);
+          } catch { if (active && request === generation) setAccount(unavailable(selected.providerID, "Account adapter unavailable. Run the updated installer and restart OpenCode.")); }
+        };
+        void update();
+        const accountTimer = setInterval(() => { void update(); }, 30000);
+        const changed = context.data.on?.("credential.switched", () => { setAccount(undefined); void update(); });
+        onCleanup(() => { active = false; controller.abort(); clearInterval(accountTimer); changed?.(); });
+      });
+      return dispose;
+    });
+    const props: ViewProps = { context, snapshot, error, account, models, details,
+      selection: () => context.ui.model?.current(),
+      get budgetVisible() { return usage?.budgetVisible ?? false; },
       get motion() { return enabled() && process.env["OCQUOTA_REDUCED_MOTION"] !== "1"; },
       get animation() { return animation(); },
       get speed() { return speed(); },
@@ -146,15 +201,16 @@ export default Plugin.define({
           refresh();
           const current = snapshot();
           await context.ui.dialog.alert({ title: "ocquota · local usage budget", message: error() || (current
-            ? `${formatCompact(current.totalTokens)} tokens · ${formatMoney(current.cost)}\n${status(current, props.limitConfigured)}\n${current.sessions} sessions · ${current.messages} messages\nResets in ${formatDuration(current.resetAt - current.takenAt)}\n\nChange the whole workspace theme with /themes → any ocquota theme.\n/motion pauses decor; /motion-next changes scene; /motion-faster and /motion-slower adjust speed.\nCached reads are excluded. This is your local budget, not a provider account limit.`
+            ? `${accountLines(account()).join("\n")}\n${account()?.note ?? ""}\nSource: ${account()?.source ?? "pending"}\n\nLOCAL USAGE\n${formatCompact(current.totalTokens)} tokens · ${formatMoney(current.cost)}\n${status(current, props.limitConfigured)}\n${current.sessions} sessions · ${current.messages} messages\nResets in ${formatDuration(current.resetAt - current.takenAt)}\n\nChange the whole workspace theme with /themes → any ocquota theme.\n/motion pauses decor; /motion-next changes scene; /motion-faster and /motion-slower adjust speed.\nCached reads are excluded. This is your local budget, not a provider account limit.`
             : "Start an OpenCode session to see usage.") });
         } },
+        { id: "ocquota.expand", title: "Toggle detailed local statistics", group: "ocquota", palette: true, slash: { name: "ocquota-details" }, run: () => { setDetails((value) => !value); } },
         { id: "ocquota.motion", title: "Pause or resume ambient motion", group: "ocquota", palette: true, slash: { name: "motion" }, run: () => { setEnabled((value) => !value); } },
         { id: "ocquota.motion.next", title: "Next ambient scene", group: "ocquota", palette: true, slash: { name: "motion-next" }, run: () => { setAnimation((value) => MOTION_STYLES[(MOTION_STYLES.indexOf(value) + 1) % MOTION_STYLES.length]!); } },
         { id: "ocquota.motion.faster", title: "Speed up ambient motion", group: "ocquota", palette: true, slash: { name: "motion-faster" }, run: () => { setSpeed((value) => Math.min(3, value + 0.25)); } },
         { id: "ocquota.motion.slower", title: "Slow down ambient motion", group: "ocquota", palette: true, slash: { name: "motion-slower" }, run: () => { setSpeed((value) => Math.max(0.25, value - 0.25)); } },
         ] })),
     ];
-    return () => { clearInterval(timer); for (const cleanup of cleanups) if (cleanup) cleanup(); usage?.close(); };
+    return () => { disposeAccounts(); clearInterval(timer); for (const cleanup of cleanups) if (cleanup) cleanup(); usage?.close(); };
   },
 });
