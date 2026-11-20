@@ -93,6 +93,7 @@ export function fullRenderer(app: App, watch = false): Renderer {
   if (app.config.theme !== "raw") {
     return new ThemeRenderer({
       theme: app.config.theme, timeZone: app.timeZone, color: COLORS.isColorSupported, watch,
+      ...(watch ? { rows: Math.max(1, (process.stdout.rows ?? 24) - 7) } : {}),
       limitConfigured: app.config.metric !== "cost" || app.config.limitCost !== null,
     });
   }

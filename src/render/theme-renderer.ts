@@ -69,7 +69,7 @@ export class ThemeRenderer implements Renderer {
       line(`${heading}  ${status}`, accent, true);
       bar();
       line(usage, palette.accent);
-      line(`${formatCount(snapshot.messages)} ${countLabel} · ${snapshot.sessions} sessions · ${spend}`);
+      line(`${formatCount(snapshot.messages)} ${countLabel} · ${snapshot.sessions} sessions · ${formatCompact(snapshot.totalTokens)} tokens · ${spend}`);
       line(`${remaining} · ${reset}`);
     } else if (theme === "ember") {
       line("");
@@ -96,7 +96,7 @@ export class ThemeRenderer implements Renderer {
       line("");
       line(reset, palette.accent);
     }
-    if (!compact) {
+    {
       line(`${formatCompact(snapshot.tokens.input)} in · ${formatCompact(snapshot.tokens.output)} out · ${formatCompact(snapshot.tokens.reasoning)} reasoning`);
       line(`${formatCompact(snapshot.tokens.cacheWrite)} cache write · ${formatCompact(snapshot.tokens.cacheRead)} cache read (excluded)`);
     }
