@@ -75,7 +75,7 @@ export class Fixture {
   }
 
   session(id: string, title: string | null): void {
-    this.seed.prepare("INSERT INTO session_v2 VALUES (?, ?)").run(id, title);
+    this.seed.query("INSERT INTO session_v2 VALUES (?, ?)").run(id, title);
   }
 
   message(row: MessageFixture): string {
@@ -83,7 +83,7 @@ export class Fixture {
     this.seq += 1;
     const id = `msg_${this.seq}`;
     this.seed
-      .prepare("INSERT INTO session_message VALUES (?, ?, ?, ?, ?, ?, ?)")
+      .query("INSERT INTO session_message VALUES (?, ?, ?, ?, ?, ?, ?)")
       .run(
         id,
         sessionId,
@@ -97,7 +97,7 @@ export class Fixture {
   }
 
   updateMessage(id: string, data: string, timeUpdated: number): void {
-    this.seed.prepare("UPDATE session_message SET data = ?, time_updated = ? WHERE id = ?").run(data, timeUpdated, id);
+    this.seed.query("UPDATE session_message SET data = ?, time_updated = ? WHERE id = ?").run(data, timeUpdated, id);
   }
 
   lockConnection(): Database {
