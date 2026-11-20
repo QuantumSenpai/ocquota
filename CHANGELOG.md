@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.3.0 — 2026-11-20
 
 - Add `codex-install` for native Aurora, Ember and Mono themes and live Codex CLI footer stats.
 - Preserve existing Codex settings and footer items with a private config backup; support custom Codex homes and reduced motion.

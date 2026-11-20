@@ -23,13 +23,13 @@ Inside OpenCode, use `/ocquota` for statistics and `/themes` to switch themes.
 For Codex CLI native themes and live footer stats, see the Codex setup below.
 The standalone usage view is `ocquota watch --source codex --theme aurora`.
 
-### Native Codex CLI setup (next release)
+### Native Codex CLI setup
 
-Build this checkout to use the new installer; npm 0.2.0 does not include it:
+Install or update to ocquota 0.3.0 or newer:
 
 ```bash
-bun run build
-bun dist/cli.js codex-install --theme aurora
+npm install -g @kyzenn.raw/ocquota@latest
+ocquota codex-install --theme aurora
 codex
 ```
 
@@ -98,7 +98,7 @@ The native plugin can also be loaded through `plugins` in OpenCode's `cli.json`:
 ```json
 {
   "plugins": [{
-    "package": "@kyzenn.raw/ocquota@0.2.0",
+    "package": "@kyzenn.raw/ocquota@0.3.0",
     "options": { "limitTokens": 5000000, "window": "day", "motion": true }
   }]
 }
@@ -231,6 +231,6 @@ For a local installation before publication:
 
 ```sh
 npm pack
-npm install -g ./kyzenn.raw-ocquota-0.2.0.tgz
+npm install -g ./kyzenn.raw-ocquota-0.3.0.tgz
 ocquota preview --source codex --theme ember
 ```

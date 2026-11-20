@@ -1,6 +1,6 @@
 {
   "name": "@kyzenn.raw/ocquota",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "description": "Themed, read-only usage and quota reports for OpenCode and Codex.",
   "license": "MIT",
   "author": "Krishnendu",
