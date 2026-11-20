@@ -34,6 +34,12 @@ test("release tarball installs offline, runs independently, and sets up the nati
     expect(readFileSync(join(native, "tui.tsx"), "utf8")).toContain('from "./tui-runtime.js"');
     const runtime = await import(join(native, "tui-runtime.js"));
     expect(typeof runtime.openNativeUsage).toBe("function");
+    const codexHome = join(temp, "codex-settings");
+    expect(run([command, "codex-install", "--theme", "mono", "--codex-home", codexHome], temp)).toContain("Native Codex themes and status-line stats installed");
+    const codexConfig = Bun.TOML.parse(readFileSync(join(codexHome, "config.toml"), "utf8")) as { tui: { theme: string; status_line: string[] } };
+    expect(codexConfig.tui.theme).toBe("ocquota-mono");
+    expect(codexConfig.tui.status_line).toContain("used-tokens");
+    expect(readFileSync(join(codexHome, "themes", "ocquota-mono.tmTheme"), "utf8")).toContain("<plist");
   } finally {
     rmSync(temp, { recursive: true, force: true });
   }

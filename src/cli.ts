@@ -15,6 +15,7 @@ import { DEFAULT_CONFIG } from "./config/schema.ts";
 import { FullRenderer } from "./render/full-renderer.ts";
 import { ProgressBar } from "./render/progress-bar.ts";
 import { installOpenCode } from "./opencode/install.ts";
+import { installCodex } from "./codex/install.ts";
 
 function report(render: (app: App) => string): (options: RawOptions) => void {
   return withApp((app) => writeLine(render(app)));
@@ -59,6 +60,13 @@ function main(): void {
     if (theme !== "aurora" && theme !== "ember" && theme !== "mono") throw new ConfigError("Native OpenCode theme must be aurora, ember or mono.");
     const result = installOpenCode({ theme, ...(options.motion === false ? { motion: false } : {}) });
     writeLine(`Native OpenCode integration installed.\nConfig: ${result.configPath}\nRestart OpenCode, then use /ocquota or /themes.\nPrevious settings were backed up alongside cli.json.`);
+  });
+
+  cli.command("codex-install", "Install native themes and live status-line stats inside Codex CLI").action((options: RawOptions) => {
+    const theme = options.theme ?? "aurora";
+    if (theme !== "aurora" && theme !== "ember" && theme !== "mono") throw new ConfigError("Native Codex theme must be aurora, ember or mono.");
+    const result = installCodex({ theme, ...(options.codexHome ? { codexHome: options.codexHome } : {}), ...(options.motion === false ? { motion: false } : {}) });
+    writeLine(`Native Codex themes and status-line stats installed.\nConfig: ${result.configPath}\nRestart Codex, then use /theme, /statusline or /status.${result.backupPath ? `\nBackup: ${result.backupPath}` : ""}\nThemes style syntax, diffs and the native footer. Stats use Codex's live session data.`);
   });
 
   cli.command("themes", "List available workspace themes").action(() => {

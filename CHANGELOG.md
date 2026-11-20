@@ -1,5 +1,10 @@
 # Changelog
 
+## Unreleased
+
+- Add `codex-install` for native Aurora, Ember and Mono themes and live Codex CLI footer stats.
+- Preserve existing Codex settings and footer items with a private config backup; support custom Codex homes and reduced motion.
+
 ## 0.2.0 — 2026-11-19
 
 - Native OpenCode 2.3.2+ TUI plugin: sidebar budget meter, compact footer and `/ocquota` command.

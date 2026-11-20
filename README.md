@@ -20,7 +20,40 @@ opencode
 ```
 
 Inside OpenCode, use `/ocquota` for statistics and `/themes` to switch themes.
-For the standalone Codex usage view, run `ocquota watch --source codex --theme aurora`.
+For Codex CLI native themes and live footer stats, see the Codex setup below.
+The standalone usage view is `ocquota watch --source codex --theme aurora`.
+
+### Native Codex CLI setup (next release)
+
+Build this checkout to use the new installer; npm 0.2.0 does not include it:
+
+```bash
+bun run build
+bun dist/cli.js codex-install --theme aurora
+codex
+```
+
+Restart Codex after setup. Use `/theme` to switch between `ocquota-aurora`,
+`ocquota-ember` and `ocquota-mono`; use `/statusline` to customize the native
+footer and `/status` for account/session details. Verified with Codex CLI 0.170.0.
+
+The themes color syntax highlighting, diffs and the native footer. Codex keeps
+control of the terminal background and the rest of its UI. The footer uses
+Codex's live data: Aurora emphasizes context and tokens, Ember prioritizes
+5-hour/weekly limits and input/output tokens, and Mono starts with a compact
+model/context/token layout. Limits appear when supplied by the account; these
+are account limits, separate from ocquota's configurable local token budget.
+Existing footer items are retained, including when changing theme presets.
+
+The installer respects `--codex-home`, `OCQUOTA_CODEX_HOME`, then `CODEX_HOME`
+(default `~/.codex`). It preserves settings, creates a private verbatim backup
+of `config.toml`, and installs `.tmTheme` files under `themes/`. TOML formatting
+and comments are normalized in the active config; the original remains in the
+backup. Use `--no-motion` to disable Codex animations; existing animation
+preferences otherwise remain in effect. No extra background process is needed.
+
+See the official [CLI customization guide](https://learn.chatgpt.com/docs/cli-customization)
+and [Codex 0.170.0 TUI configuration schema](https://github.com/openai/codex/blob/rust-v0.170.0/codex-rs/core/config.schema.json).
 
 Bun 1.4.4 or newer must be installed and on your PATH, including when using npm
 to install this package. The npm package contains a bundled CLI, so users do not
